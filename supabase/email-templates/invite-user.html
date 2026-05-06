@@ -1,0 +1,78 @@
+<!--
+  NammaPoruppu - Invite user (admin / inviteUserByEmail)
+  Paste into: Supabase Dashboard → Authentication → Email Templates → Invite user
+
+  Variables: {{ .ConfirmationURL }}, {{ .SiteURL }}, {{ .Email }}, {{ .Token }} (OTP alternative), {{ .RedirectTo }}
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>You’re invited to NammaPoruppu</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    Accept your invitation to join NammaPoruppu on {{ .SiteURL }}.
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f1f5f9;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#e11d48 0%,#f97316 100%);padding:28px 32px;text-align:center;">
+              <p style="margin:0 0 8px 0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);">Invitation</p>
+              <h1 style="margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#ffffff;">You’re invited to NammaPoruppu</h1>
+              <p style="margin:12px 0 0 0;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.92);">Your team added you so you can report civic issues, verify reports, and follow ward-level accountability.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              {{ if .Email }}
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#334155;">This invitation is for <strong style="color:#0f172a;">{{ .Email }}</strong>. Accept it once to create or link your account.</p>
+              {{ else }}
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#334155;">Accept the invitation below once to create or link your account.</p>
+              {{ end }}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 24px 0;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;text-decoration:none;color:#ffffff;background-color:#e11d48;border-radius:12px;box-shadow:0 2px 8px rgba(225,29,72,0.35);">Accept invitation</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 12px 0;font-size:13px;line-height:1.5;color:#64748b;">Or paste this link into your browser:</p>
+              <p style="margin:0 0 24px 0;font-size:12px;line-height:1.5;word-break:break-all;color:#0f172a;background-color:#f8fafc;padding:12px 14px;border-radius:8px;border:1px solid #e2e8f0;">{{ .ConfirmationURL }}</p>
+              {{ if .Token }}
+              <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#64748b;">If you are asked for a code instead of a link, use:</p>
+              <p style="margin:0 0 24px 0;font-size:20px;font-weight:800;letter-spacing:0.2em;color:#0f172a;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">{{ .Token }}</p>
+              {{ end }}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px 0;background-color:#fff7ed;border-radius:10px;border:1px solid #fed7aa;">
+                <tr>
+                  <td style="padding:14px 16px;">
+                    <p style="margin:0;font-size:13px;line-height:1.55;color:#78350f;">This invite expires after a limited time. Do not forward this email. If you were not expecting an invitation, you can ignore it.</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:13px;line-height:1.5;color:#94a3b8;">After you accept, you will land on <a href="{{ .SiteURL }}" style="color:#e11d48;text-decoration:none;">{{ .SiteURL }}</a>{{ if .RedirectTo }} → <span style="word-break:break-all;">{{ .RedirectTo }}</span>{{ end }}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px 32px;background-color:#f8fafc;border-top:1px solid #e2e8f0;">
+              <p style="margin:0 0 8px 0;font-size:12px;color:#64748b;text-align:center;">NammaPoruppu · Civic transparency for Tamil Nadu</p>
+              <p style="margin:0;font-size:11px;color:#94a3b8;text-align:center;">Automated message - replies are not monitored.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
