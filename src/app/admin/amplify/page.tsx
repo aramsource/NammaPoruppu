@@ -15,6 +15,7 @@ type Row = {
   twitter_url: string | null;
   created_at: string;
   primary_report_image_url: string | null;
+  report_image_urls: string[];
 };
 
 function xIntentComposeUrl(text: string) {
@@ -182,29 +183,38 @@ export default function AdminAmplifyPage() {
                 </div>
                 <p className="mt-2 text-xs font-semibold text-slate-500">Report {r.report_id}</p>
 
-                {r.primary_report_image_url ? (
+                {r.report_image_urls?.length ? (
                   <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-semibold text-slate-700">Reporter photo (attach in X)</p>
-                    <div className="mt-2 flex flex-wrap items-start gap-3">
-                      <img
-                        src={r.primary_report_image_url}
-                        alt=""
-                        className="h-28 max-w-[200px] rounded-lg border border-slate-200 object-cover"
-                      />
-                      <div className="min-w-0 flex-1 space-y-2 text-xs text-slate-600">
-                        <p>
-                          X cannot pre-fill media from a link. Open the image, save it (or drag the tab), then add it in the post
-                          composer while logged in as @nammaporuppu.
-                        </p>
-                        <a
-                          href={r.primary_report_image_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block font-semibold text-accent-700 hover:underline"
-                        >
-                          Open full image
-                        </a>
-                      </div>
+                    <p className="text-xs font-semibold text-slate-700">Reporter photos (attach in X)</p>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {r.report_image_urls.map((url, idx) => (
+                        <div key={url} className="rounded-lg border border-slate-200 bg-white p-2">
+                          <img src={url} alt="" className="h-28 w-full rounded-md object-cover" />
+                          <div className="mt-2 flex gap-2">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              Open
+                            </a>
+                            <a
+                              href={url}
+                              download={`report-${r.report_id}-image-${idx + 1}`}
+                              className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 min-w-0 flex-1 space-y-2 text-xs text-slate-600">
+                      <p>
+                        X cannot pre-fill media from a link. Download one or more photos above, then add them in the post
+                        composer while logged in as @nammaporuppu.
+                      </p>
                     </div>
                   </div>
                 ) : (

@@ -4,13 +4,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 type ReportImageRow = { image_url: string; image_kind: string; created_at: string };
 
-function primaryReportImageUrl(reports: { report_images: ReportImageRow[] | null } | null): string | null {
+function reportImageUrls(reports: { report_images: ReportImageRow[] | null } | null): string[] {
   const imgs = reports?.report_images;
-  if (!imgs?.length) return null;
+  if (!imgs?.length) return [];
   const reportOnly = imgs
     .filter((i) => i.image_kind === "report")
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  return reportOnly[0]?.image_url ?? null;
+  return reportOnly.map((i) => i.image_url).filter(Boolean);
 }
 
 export async function GET(request: Request) {
@@ -64,9 +64,11 @@ export async function GET(request: Request) {
     };
     const { reports: reportsRaw, ...rest } = typed;
     const reports = Array.isArray(reportsRaw) ? reportsRaw[0] ?? null : reportsRaw;
+    const imageUrls = reportImageUrls(reports);
     return {
       ...rest,
-      primary_report_image_url: primaryReportImageUrl(reports),
+      report_image_urls: imageUrls,
+      primary_report_image_url: imageUrls[0] ?? null,
     };
   });
 
