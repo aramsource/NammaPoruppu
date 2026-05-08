@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { issueCategories, Report, Ward } from "@/lib/domain";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { getChennaiWardIndex } from "@/lib/chennai-ward-index";
 
 export const revalidate = 60;
@@ -132,6 +132,17 @@ export default async function Home() {
   const resolvedReports = reportsSource.filter((r) => r.status === "resolved").length;
   const openReports = totalReports - resolvedReports;
   const totalSupport = reportsSource.reduce((s, r) => s + r.supportCount, 0);
+  let citizensJoined = 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
+    if (!error) {
+      citizensJoined = data?.total ?? 0;
+    }
+  } catch {
+    // Fallback for environments without service-role access (local/dev).
+    citizensJoined = totalSupport;
+  }
   const resolutionRate = Math.round((resolvedReports / Math.max(totalReports, 1)) * 100);
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const latestReports = reportsSource.filter((r) => new Date(r.createdAt).getTime() >= oneWeekAgo).length;
@@ -236,7 +247,7 @@ export default async function Home() {
               { label: "Latest reports", value: latestReports, color: "text-amber-300" },
               { label: "Resolved this week", value: resolvedThisWeek, color: "text-emerald-400" },
               { label: "Ward coverage", value: `${activeWardStats.length}`, color: "text-accent-300" },
-              { label: "Citizens joined", value: `${totalSupport}+`, color: "text-brand-300" },
+              { label: "Citizens joined", value: `${citizensJoined}+`, color: "text-brand-300" },
             ].map((s, i) => (
               <div
                 key={s.label}
@@ -298,7 +309,11 @@ export default async function Home() {
           </div>
           <div className="mt-8 space-y-3">
             {hotIssues.length > 0 ? hotIssues.map((r, i) => (
-              <div key={r.id} className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-5 transition hover:border-accent-200 hover:bg-accent-50">
+              <Link
+                key={r.id}
+                href={`/explore-map?reportId=${encodeURIComponent(r.id)}&wardId=${encodeURIComponent(r.governance.wardId)}`}
+                className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-5 transition hover:border-accent-200 hover:bg-accent-50"
+              >
                 <span className={`shrink-0 flex h-10 w-10 items-center justify-center rounded-xl text-lg font-black text-white ${i === 0 ? "bg-brand-600" : i === 1 ? "bg-accent-600" : "bg-slate-400"}`}>
                   #{i + 1}
                 </span>
@@ -311,7 +326,7 @@ export default async function Home() {
                   <p className="text-sm font-black text-brand-600">{r.supportCount} supports</p>
                   <p className="text-[11px] text-slate-400">{r.governance.wardName}</p>
                 </div>
-              </div>
+              </Link>
             )) : (
               <p className="rounded-2xl bg-slate-50 px-5 py-8 text-center text-sm text-slate-400">No open issues yet. Be the first to report one!</p>
             )}
@@ -347,7 +362,7 @@ export default async function Home() {
               </div>
               <div className="space-y-4">
                 {worstWards.map((ws) => (
-                  <div key={ws.ward.id}>
+                  <Link key={ws.ward.id} href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`} className="block">
                     <div className="flex items-center justify-between mb-1.5">
                       <p className="text-sm font-bold text-white">{ws.ward.wardName} <span className="text-[10px] font-normal text-slate-500">{ws.ward.zoneName}</span></p>
                       <span className="text-xs font-black text-brand-400">{ws.rate}%</span>
@@ -358,7 +373,7 @@ export default async function Home() {
                     <p className="mt-1 text-[10px] text-slate-500">
                       <span className="text-brand-400 font-semibold">{ws.open} open</span> · {ws.resolved} resolved · {ws.total} total
                     </p>
-                  </div>
+                  </Link>
                 ))}
                 {worstWards.length === 0 && <p className="text-sm text-slate-500">No data yet.</p>}
               </div>
@@ -374,7 +389,7 @@ export default async function Home() {
               </div>
               <div className="space-y-4">
                 {bestWards.map((ws) => (
-                  <div key={ws.ward.id}>
+                  <Link key={ws.ward.id} href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`} className="block">
                     <div className="flex items-center justify-between mb-1.5">
                       <p className="text-sm font-bold text-white">{ws.ward.wardName} <span className="text-[10px] font-normal text-slate-500">{ws.ward.zoneName}</span></p>
                       <span className="text-xs font-black text-emerald-400">{ws.rate}%</span>
@@ -385,7 +400,7 @@ export default async function Home() {
                     <p className="mt-1 text-[10px] text-slate-500">
                       <span className="text-emerald-400 font-semibold">{ws.resolved} resolved</span> · {ws.open} open · {ws.total} total
                     </p>
-                  </div>
+                  </Link>
                 ))}
                 {bestWards.length === 0 && <p className="text-sm text-slate-500">No data yet.</p>}
               </div>
@@ -402,7 +417,11 @@ export default async function Home() {
               <span className="text-right">Rate</span>
             </div>
             {wardTableRows.map((ws) => (
-              <div key={ws.ward.id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 border-b border-white/5 px-5 py-3 text-sm last:border-0 hover:bg-white/5 transition-colors">
+              <Link
+                key={ws.ward.id}
+                href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`}
+                className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 border-b border-white/5 px-5 py-3 text-sm last:border-0 hover:bg-white/5 transition-colors"
+              >
                 <div>
                   <p className="font-bold text-white">{ws.ward.wardName}</p>
                   <p className="text-[10px] text-slate-500">{ws.ward.zoneName}</p>
@@ -417,7 +436,7 @@ export default async function Home() {
                 }`}>
                   {ws.rate}%
                 </span>
-              </div>
+              </Link>
             ))}
             {wardTableRows.length === 0 && (
               <p className="px-5 py-6 text-sm text-slate-500">No ward-level reports yet.</p>
