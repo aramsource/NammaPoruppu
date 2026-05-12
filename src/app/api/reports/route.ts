@@ -71,6 +71,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
   const body = await request.json().catch(() => null);
 
   const category = body?.category as string | undefined;
@@ -92,6 +94,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createSupabaseServerClient();
+    if (!bearerToken) {
+      return ok({ error: "Sign in required" }, { status: 401 });
+    }
+    const { data: userData, error: authError } = await supabase.auth.getUser(bearerToken);
+    if (authError || !userData.user) {
+      return ok({ error: "Sign in required" }, { status: 401 });
+    }
     const mappedWardNo = await resolveWardIdFromPoint(lat, lng);
     let wardId: string | null = null;
     let returnWard: { wardId: string; wardName: string; wardNumber: number } | null = null;
@@ -126,6 +135,7 @@ export async function POST(request: NextRequest) {
         lng,
         accuracy_meters: body?.accuracyMeters ?? null,
         reporter_session_id: body?.reporterSessionId ?? `sess_${Date.now()}`,
+        reporter_user_id: userData.user.id,
       })
       .select("id, report_ref")
       .single();

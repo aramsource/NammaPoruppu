@@ -104,7 +104,7 @@ async function searchLocationByText(query: string): Promise<SearchLocationResult
 }
 
 export default function ReportIssuePage() {
-  const { user } = useAuth();
+  const { user, session, loading } = useAuth();
   const [step, setStep] = useState<Step>("form");
   const [reportRef, setReportRef] = useState("");
   const [submittedReportId, setSubmittedReportId] = useState("");
@@ -265,6 +265,10 @@ export default function ReportIssuePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError("");
+    if (!user) {
+      setSubmitError("Please sign in to submit a report.");
+      return;
+    }
     if (!category) {
       setSubmitError("Issue type is required.");
       return;
@@ -287,7 +291,10 @@ export default function ReportIssuePage() {
 
       const createRes = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
         body: JSON.stringify({
           cityId: "chennai",
           category,
@@ -406,7 +413,7 @@ export default function ReportIssuePage() {
         <PageHero
           eyebrow="Success"
           title="Report submitted!"
-          subtitle="Now visible on the map, no login needed."
+          subtitle="Now visible on the map and linked to your account."
           tone="brand"
           containerWidth="xl"
         />
@@ -442,14 +449,6 @@ export default function ReportIssuePage() {
               </div>
             )}
           </div>
-          {!user && submittedReportId ? (
-            <Link
-              href={`/auth?claim_report=${encodeURIComponent(submittedReportId)}&next=${encodeURIComponent("/my-reports")}`}
-              className="mt-4 flex w-full items-center justify-center rounded-full border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              📱 Get updates via phone / email
-            </Link>
-          ) : null}
           <button
             type="button"
             onClick={resetForm}
@@ -469,11 +468,25 @@ export default function ReportIssuePage() {
       <PageHero
         eyebrow="Report"
         title="Report an issue"
-        subtitle="Photo, location, and category. That&apos;s all we need. No login required."
+        subtitle="Photo, location, and category. Sign in is required to submit."
         tone="accent"
         containerWidth="xl"
       />
       <PageBody maxWidth="xl">
+        {!loading && !user ? (
+          <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-900">
+            <p className="font-semibold">Sign in required</p>
+            <p className="mt-1 text-xs text-brand-700">
+              To prevent spam reports, you need to sign in before submitting an issue.
+            </p>
+            <Link
+              href={`/auth?next=${encodeURIComponent("/report-issue")}`}
+              className="mt-3 inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
+            >
+              Sign in to continue
+            </Link>
+          </div>
+        ) : null}
         <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
 
           {/* ── 1. Location (first - most important, auto-filled) ── */}
@@ -814,7 +827,7 @@ export default function ReportIssuePage() {
           {/* ── Submit ── */}
           <button
             type="submit"
-            disabled={!category || submitting}
+            disabled={!category || submitting || !user}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-4 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-40"
           >
             {submitting ? (
@@ -850,7 +863,7 @@ export default function ReportIssuePage() {
           <p className="text-center text-[11px] text-slate-400">
             {user
               ? "Public immediately · Linked to your account for updates"
-              : "Public immediately · No login · Optionally link phone/email later for updates"}
+              : "Sign in required to submit and track updates"}
           </p>
           {submitError && (
             <p className="text-center text-xs font-semibold text-brand-600">{submitError}</p>
