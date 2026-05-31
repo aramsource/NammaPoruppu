@@ -7,6 +7,7 @@ import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap } from "react-l
 import { Report, Ward } from "@/lib/domain";
 import { City, DEFAULT_CITY } from "@/lib/cities";
 import { wardGeoJsonPublicPath } from "@/lib/ward-geo-client";
+import { useTranslation } from "@/context/language-context";
 
 type IssueMapViewProps = {
   reports: Report[];
@@ -211,6 +212,7 @@ export function IssueMapView({
   onWardSelect,
   onIssueClick,
 }: IssueMapViewProps) {
+  const { t } = useTranslation();
   const [geoWards, setGeoWards] = useState<GeoWardFeature[]>([]);
   const [hoverWardId, setHoverWardId] = useState<string | null>(null);
 
@@ -262,11 +264,11 @@ export function IssueMapView({
         <div className="flex items-baseline gap-5 text-xs">
           <p>
             <span className="text-xl font-black text-brand-400">{activeIssues}</span>{" "}
-            <span className="font-semibold uppercase tracking-wider text-white/45">Open</span>
+            <span className="font-semibold uppercase tracking-wider text-white/45">{t("map.openCount")}</span>
           </p>
           <p>
             <span className="text-xl font-black text-white">{reports.length}</span>{" "}
-            <span className="font-semibold uppercase tracking-wider text-white/45">Reports</span>
+            <span className="font-semibold uppercase tracking-wider text-white/45">{t("map.reportCount")}</span>
           </p>
         </div>
       </div>
@@ -275,7 +277,7 @@ export function IssueMapView({
       {focusedWardShape && (
         <div className="pointer-events-none absolute bottom-20 left-4 z-[500] max-w-[48vw] rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 shadow-lg backdrop-blur-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-            {hoverWardId ? "Hovering ward" : "Selected ward"}
+            {hoverWardId ? t("explore.hoveringWard") : t("explore.selectedWard")}
           </p>
           <p className="text-sm font-black leading-tight text-white">
             {focusedWardShape.wardName}
@@ -283,10 +285,10 @@ export function IssueMapView({
           </p>
           {focusedWardArea ? <p className="mt-0.5 text-xs text-white/55">{focusedWardArea}</p> : null}
           <p className={`mt-1 text-sm font-bold ${focusedWardShape.count > 0 ? "text-brand-400" : "text-white/40"}`}>
-            {focusedWardShape.count} issue{focusedWardShape.count !== 1 ? "s" : ""}
+            {focusedWardShape.count} {focusedWardShape.count !== 1 ? t("common.issues") : t("common.issue")}
           </p>
           {focusedWardShape.count > 0 && (
-            <p className="mt-0.5 text-[10px] text-slate-400">Tap an issue dot to view details</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{t("explore.tapIssueDot")}</p>
           )}
         </div>
       )}

@@ -6,18 +6,15 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useCity } from "@/context/city-context";
 import { useAuth } from "@/context/auth-context";
+import { useTranslation } from "@/context/language-context";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { CITIES, City } from "@/lib/cities";
-
-const navItems = [
-  { href: "/report-issue", label: "Report Issue", primary: true },
-  { href: "/explore-map", label: "Explore Map" },
-  { href: "/my-reports", label: "My Reports" },
-];
 
 const GITHUB_URL = "https://github.com/aramsource/NammaPoruppu";
 
 function CityPicker() {
   const { city, setCity, locationState, detectLocation } = useCity();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -57,8 +54,8 @@ function CityPicker() {
         <div className="absolute right-0 top-full mt-2 z-[2000] w-[min(16rem,calc(100vw-1rem))] overflow-hidden rounded-2xl bg-white ring-2 ring-slate-200">
           {/* Header */}
           <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-xs font-bold text-slate-900">Tamil Nadu Cities</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Report and explore issues in your city</p>
+            <p className="text-xs font-bold text-slate-900">{t("city.pickerTitle")}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{t("city.pickerSubtitle")}</p>
           </div>
 
           {/* Detect location */}
@@ -72,7 +69,7 @@ function CityPicker() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
             </svg>
-            {locationState === "detecting" ? "Detecting location…" : "Use my current location"}
+            {locationState === "detecting" ? t("city.detecting") : t("city.detectLocation")}
           </button>
 
           {/* City list */}
@@ -103,7 +100,7 @@ function CityPicker() {
                     </span>
                     {!c.active && (
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                        Soon
+                        {t("city.soon")}
                       </span>
                     )}
                     {isSelected && (
@@ -126,6 +123,13 @@ export function TopNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { user, loading, signOut } = useAuth();
+  const { t } = useTranslation();
+
+  const navItems = [
+    { href: "/report-issue", label: t("nav.reportIssue"), primary: true },
+    { href: "/explore-map", label: t("nav.exploreMap"), primary: false },
+    { href: "/my-reports", label: t("nav.myReports"), primary: false },
+  ];
 
   return (
     <>
@@ -145,6 +149,7 @@ export function TopNav() {
 
           {/* Desktop: city picker + nav links - all on the right */}
           <div className="hidden items-center gap-2 md:flex">
+            <LanguageSwitcher />
             <CityPicker />
             <div className="mx-1 h-5 w-px bg-white/25" />
             {navItems.map((item) => {
@@ -173,8 +178,8 @@ export function TopNav() {
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.426 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.344-3.369-1.344-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.607.069-.607 1.004.071 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.378.202 2.398.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.579.688.481A10.02 10.02 0 0 0 22 12.017C22 6.484 17.523 2 12 2Z" />
-              </svg>
-              GitHub
+              </svg            >
+              {t("nav.github")}
             </a>
             {!loading && user ? (
               <button
@@ -182,26 +187,27 @@ export function TopNav() {
                 onClick={() => void signOut()}
                 className="rounded-full border border-white/35 bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/20"
               >
-                Sign out
+                {t("nav.signOut")}
               </button>
             ) : (
               <Link
                 href="/auth"
                 className="rounded-full border border-white/35 bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/20"
               >
-                Sign in
+                {t("nav.signIn")}
               </Link>
             )}
           </div>
 
           {/* Mobile: city pill + hamburger */}
           <div className="flex items-center gap-2 md:hidden">
+            <LanguageSwitcher compact />
             <CityPicker />
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-white transition hover:bg-white/15"
-              aria-label="Toggle menu"
+              aria-label={t("nav.toggleMenu")}
             >
               {open ? (
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -248,7 +254,7 @@ export function TopNav() {
                   onClick={() => setOpen(false)}
                   className="flex w-full items-center rounded-xl px-4 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                 >
-                  GitHub
+                  {t("nav.github")}
                 </a>
               </li>
               <li className="pt-1">
@@ -258,7 +264,7 @@ export function TopNav() {
                     onClick={() => { void signOut(); setOpen(false); }}
                     className="flex w-full items-center rounded-xl px-4 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-100"
                   >
-                    Sign out
+                    {t("nav.signOut")}
                   </button>
                 ) : (
                   <Link
@@ -266,7 +272,7 @@ export function TopNav() {
                     onClick={() => setOpen(false)}
                     className="flex w-full items-center rounded-xl px-4 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-100"
                   >
-                    Sign in
+                    {t("nav.signIn")}
                   </Link>
                 )}
               </li>

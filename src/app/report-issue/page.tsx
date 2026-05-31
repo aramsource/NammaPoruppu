@@ -10,6 +10,8 @@ import { issueCategories } from "@/lib/domain";
 import { isWithinCityBounds } from "@/lib/ward-geo-client";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
+import { useTranslation } from "@/context/language-context";
+import { categoryLabel } from "@/lib/i18n";
 
 const CAT_ICON: Record<string, string> = {
   Pothole: "🕳",
@@ -107,6 +109,7 @@ async function searchLocationByText(query: string, cityName: string): Promise<Se
 export default function ReportIssuePage() {
   const { user, session, loading } = useAuth();
   const { city } = useCity();
+  const { t, locale } = useTranslation();
   const [step, setStep] = useState<Step>("form");
   const [reportRef, setReportRef] = useState("");
   const [submittedReportId, setSubmittedReportId] = useState("");
@@ -415,9 +418,9 @@ export default function ReportIssuePage() {
     return (
       <main className="min-h-[calc(100vh-64px)]">
         <PageHero
-          eyebrow="Success"
-          title="Report submitted!"
-          subtitle="Now visible on the map and linked to your account."
+          eyebrow={t("report.eyebrow")}
+          title={t("report.successTitle")}
+          subtitle={t("report.successSubtitle")}
           tone="brand"
           containerWidth="xl"
         />
@@ -470,9 +473,9 @@ export default function ReportIssuePage() {
   return (
     <main className="min-h-[calc(100vh-64px)]">
       <PageHero
-        eyebrow="Report"
-        title="Report an issue"
-        subtitle="Photo, location, and category. Sign in is required to submit."
+        eyebrow={t("report.eyebrow")}
+        title={t("report.title")}
+        subtitle={t("report.subtitle")}
         tone="accent"
         containerWidth="xl"
       />

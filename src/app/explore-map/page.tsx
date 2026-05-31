@@ -14,6 +14,8 @@ import {
 import { issueCategories, ReportStatus, Report, Representative, Ward } from "@/lib/domain";
 import { getEscalationSteps, getResponsibilityForCategory } from "@/lib/responsibility";
 import { useCity } from "@/context/city-context";
+import { useTranslation } from "@/context/language-context";
+import { categoryLabel, statusLabel } from "@/lib/i18n";
 import { useAuth } from "@/context/auth-context";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getContactForCategory, getContactsForCity } from "@/lib/civic-contacts";
@@ -42,6 +44,14 @@ const PARTY_COLORS: Record<string, string> = {
   BJP: "bg-orange-50 text-orange-700 border border-orange-200",
   INC: "bg-blue-50 text-blue-700 border border-blue-200",
   Independent: "bg-slate-50 text-slate-600 border border-slate-200",
+  "CPI(M)": "bg-rose-50 text-rose-700 border border-rose-200",
+  CPI: "bg-rose-50 text-rose-800 border border-rose-200",
+  VCK: "bg-indigo-50 text-indigo-700 border border-indigo-200",
+  MDMK: "bg-red-50 text-red-800 border border-red-200",
+  IUML: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  AMMK: "bg-purple-50 text-purple-700 border border-purple-200",
+  TVK: "bg-amber-50 text-amber-800 border border-amber-200",
+  NTK: "bg-slate-800 text-white border border-slate-700",
 };
 
 type DrawerTab = "issue" | "accountability" | "contact";
@@ -95,6 +105,7 @@ function shareHashtagsForCategory(category: string, cityName: string) {
 
 export default function ExploreMapPage() {
   const { city } = useCity();
+  const { t, locale } = useTranslation();
   const { user, session } = useAuth();
   const escalationSteps = useMemo(() => getEscalationSteps(), []);
   const [liveReports, setLiveReports] = useState<Report[] | null>(null);
@@ -428,8 +439,12 @@ export default function ExploreMapPage() {
   const representatives = activeWardId ? representativesSource.filter((r) => r.wardId === activeWardId) : [];
   const primaryRep = representatives.find((r) => r.role === responsibility?.primaryRole) ?? representatives[0];
   const selectedRep = representatives.find((r) => r.id === selRepId) ?? primaryRep ?? null;
-  const electedReps = representatives.filter((r) => r.role === "MLA" || r.role === "MP");
-  const officials = representatives.filter((r) => r.role !== "MLA" && r.role !== "MP");
+  const electedReps = representatives.filter(
+    (r) => r.role === "Councillor" || r.role === "MLA" || r.role === "MP",
+  );
+  const officials = representatives.filter(
+    (r) => r.role !== "Councillor" && r.role !== "MLA" && r.role !== "MP",
+  );
   const hasRepresentativeData = representatives.length > 0;
 
   const currentStatus = selectedReport ? getStatus(selectedReport.id, selectedReport.status) : "open";
@@ -722,9 +737,9 @@ export default function ExploreMapPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2 md:gap-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
-              {city.name} · Live
+              {city.name} · {t("city.live")}
             </div>
-            <h1 className="text-base font-black tracking-tight text-white md:text-lg">Explore the map</h1>
+            <h1 className="text-base font-black tracking-tight text-white md:text-lg">{t("explore.title")}</h1>
           </div>
         {/* Row 1: Filters button (mobile) + Ward search (mobile inline) + Desktop chips */}
         <div className="flex items-center gap-2">
@@ -737,7 +752,7 @@ export default function ExploreMapPage() {
             <svg className="h-3.5 w-3.5 text-white/80" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
             </svg>
-            Filters
+            {t("explore.filters")}
             {activeFilterCount > 0 && (
               <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white ring-2 ring-accent-600">
                 {activeFilterCount}
@@ -753,7 +768,7 @@ export default function ExploreMapPage() {
                 onClick={() => setSelCategory("all")}
                 className={`rounded-full px-3 py-1 text-xs font-bold transition ${selCategory === "all" ? "bg-white text-accent-700 shadow-sm" : "text-white/90 hover:bg-white/10"}`}
               >
-                All
+                {t("common.all")}
               </button>
               {issueCategories.map((cat) => (
                 <button
@@ -762,7 +777,7 @@ export default function ExploreMapPage() {
                   onClick={() => setSelCategory(cat === selCategory ? "all" : cat)}
                   className={`rounded-full px-3 py-1 text-xs font-bold transition ${selCategory === cat ? "bg-white text-accent-700 shadow-sm" : "text-white/90 hover:bg-white/10"}`}
                 >
-                  {cat}
+                  {categoryLabel(locale, cat)}
                 </button>
               ))}
             </div>
@@ -784,7 +799,11 @@ export default function ExploreMapPage() {
                       : "text-white/90 hover:bg-white/10"
                   }`}
                 >
-                  {s === "all" ? "All" : s === "pending_verification" ? "Pending" : s}
+                  {s === "all"
+                    ? t("common.all")
+                    : s === "pending_verification"
+                      ? t("common.pending")
+                      : statusLabel(locale, s)}
                 </button>
               ))}
             </div>
@@ -901,7 +920,7 @@ export default function ExploreMapPage() {
           )}
           {selStatus !== "all" && (
             <span className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white ring-1 ring-white/20 ${selStatus === "open" ? "bg-brand-500" : selStatus === "pending_verification" ? "bg-amber-500" : "bg-emerald-600"}`}>
-              {selStatus === "pending_verification" ? "Pending" : selStatus}
+              {selStatus === "pending_verification" ? t("common.pending") : statusLabel(locale, selStatus)}
               <button type="button" onClick={() => setSelStatus("all")} className="ml-0.5 opacity-70 hover:opacity-100">✕</button>
             </span>
           )}
@@ -963,7 +982,11 @@ export default function ExploreMapPage() {
                       : "bg-slate-100 text-slate-600"
                   }`}
                 >
-                  {s === "all" ? "All" : s === "pending_verification" ? "Pending" : s}
+                  {s === "all"
+                    ? t("common.all")
+                    : s === "pending_verification"
+                      ? t("common.pending")
+                      : statusLabel(locale, s)}
                 </button>
               ))}
             </div>
@@ -1000,7 +1023,7 @@ export default function ExploreMapPage() {
         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-        Report an issue
+        {t("explore.reportIssueFab")}
       </Link>
 
       {/* ── Vaul Drawer ── */}

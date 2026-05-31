@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageBody, PageHero } from "@/components/site-page-shell";
+import { useTranslation } from "@/context/language-context";
 import { getAuthCallbackUrl } from "@/lib/auth-oauth";
 import { claimPendingReport, stashReportClaimFromSearchParams } from "@/lib/report-claim";
 import { supabaseClient } from "@/lib/supabase/client";
@@ -40,6 +41,7 @@ function GoogleIcon() {
 function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"identifier" | "otp">("identifier");
@@ -77,7 +79,7 @@ function AuthPageContent() {
     const identifier = email.trim();
     if (!identifier) {
       setLoading(false);
-      setError("Email is required.");
+      setError(t("auth.emailRequired"));
       return;
     }
     const { error: otpError } = await supabaseClient.auth.signInWithOtp({
@@ -92,7 +94,7 @@ function AuthPageContent() {
       return;
     }
     setStep("otp");
-    setMessage("Magic link and OTP sent to your email. Use either method to sign in.");
+    setMessage(t("auth.magicLinkSent"));
   }
 
   async function handleVerifyOtp(e: FormEvent) {
@@ -110,7 +112,7 @@ function AuthPageContent() {
       setError(verifyError.message);
       return;
     }
-    setMessage("Login successful.");
+    setMessage(t("auth.loginSuccess"));
     // Pending report claim is handled by <ClaimRedirect /> in layout once `user` updates.
     if (typeof window === "undefined" || !sessionStorage.getItem("np_pending_report_claim")) {
       router.push("/explore-map");
@@ -120,9 +122,9 @@ function AuthPageContent() {
   return (
     <main className="min-h-[calc(100vh-64px)]">
       <PageHero
-        eyebrow="Account"
-        title="Sign in"
-        subtitle="Sign in with Google, or use a magic link or OTP by email."
+        eyebrow={t("auth.eyebrow")}
+        title={t("auth.title")}
+        subtitle={t("auth.subtitle")}
         tone="accent"
         containerWidth="md"
       />
@@ -138,7 +140,7 @@ function AuthPageContent() {
             className="mt-6 flex w-full items-center justify-center gap-3 rounded-full border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
             <GoogleIcon />
-            Continue with Google
+            {t("auth.continueGoogle")}
           </button>
 
           <div className="relative my-6">
@@ -146,14 +148,14 @@ function AuthPageContent() {
               <div className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs uppercase tracking-wider">
-              <span className="bg-white px-3 font-semibold text-slate-400">or</span>
+              <span className="bg-white px-3 font-semibold text-slate-400">{t("common.or")}</span>
             </div>
           </div>
 
           <form className="space-y-4" onSubmit={handleSendOtp}>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Email address
+                {t("auth.emailLabel")}
               </label>
               <input
                 type="email"
@@ -169,19 +171,18 @@ function AuthPageContent() {
               disabled={loading}
               className="w-full rounded-full bg-brand-600 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-50"
             >
-              {loading ? "Sending email OTP..." : "Send email OTP"}
+              {loading ? t("auth.sendingOtp") : t("auth.sendOtp")}
             </button>
           </form>
           </>
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleVerifyOtp}>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              We sent a magic link and OTP to <span className="font-semibold">{email}</span>.
-              You can enter OTP below or open the magic link.
+              {t("auth.sentTo", { email })}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                OTP code
+                {t("auth.otpLabel")}
               </label>
               <input
                 type="text"
@@ -199,14 +200,14 @@ function AuthPageContent() {
               disabled={loading}
               className="w-full rounded-full bg-brand-600 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-50"
             >
-              {loading ? "Verifying..." : "Verify OTP"}
+              {loading ? t("auth.verifying") : t("auth.verifyOtp")}
             </button>
             <button
               type="button"
               onClick={() => setStep("identifier")}
               className="w-full text-xs font-semibold text-slate-500 hover:text-slate-700"
             >
-              Change email
+              {t("auth.back")}
             </button>
             <button
               type="button"

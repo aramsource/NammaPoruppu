@@ -6,6 +6,8 @@ import { PageBody, PageHero } from "@/components/site-page-shell";
 import { Report } from "@/lib/domain";
 import { useAuth } from "@/context/auth-context";
 import { useCity } from "@/context/city-context";
+import { useTranslation } from "@/context/language-context";
+import { statusLabel } from "@/lib/i18n";
 import { supabaseClient } from "@/lib/supabase/client";
 
 const CAT_ICON: Record<string, string> = {
@@ -51,6 +53,7 @@ function getEscalationReasonLabel(reason: string | null | undefined) {
 export default function MyReportsPage() {
   const { user } = useAuth();
   const { city, cityReady } = useCity();
+  const { t, locale } = useTranslation();
   const [myReports, setMyReports] = useState<Report[]>([]);
   const [escalationsByReportId, setEscalationsByReportId] = useState<Record<string, EscalationInfo>>({});
   const [escalatingReportId, setEscalatingReportId] = useState<string | null>(null);
@@ -300,9 +303,9 @@ export default function MyReportsPage() {
   return (
     <main className="min-h-[calc(100vh-64px)]">
       <PageHero
-        eyebrow="Your activity"
-        title="My Reports"
-        subtitle={`Issues you've reported in ${city.name}.`}
+        eyebrow={t("myReports.eyebrow")}
+        title={t("myReports.title")}
+        subtitle={t("myReports.subtitle", { city: city.name })}
         tone="accent"
         containerWidth="2xl"
         actions={
@@ -310,7 +313,7 @@ export default function MyReportsPage() {
             href="/report-issue"
             className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700"
           >
-            + New Report
+            + {t("common.newReport")}
           </Link>
         }
       />
@@ -323,10 +326,10 @@ export default function MyReportsPage() {
         {/* Summary cards */}
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Total", value: myReports.length, color: "text-slate-900" },
-            { label: "Open", value: openCount, color: "text-brand-600" },
-            { label: "Resolved", value: resolvedCount, color: "text-emerald-600" },
-            { label: "Withdrawn", value: withdrawnCount, color: "text-slate-400" },
+            { label: t("common.total"), value: myReports.length, color: "text-slate-900" },
+            { label: t("common.open"), value: openCount, color: "text-brand-600" },
+            { label: t("common.resolved"), value: resolvedCount, color: "text-emerald-600" },
+            { label: t("common.withdrawn"), value: withdrawnCount, color: "text-slate-400" },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-white px-4 py-4 text-center ring-1 ring-slate-200">
               <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
@@ -354,7 +357,7 @@ export default function MyReportsPage() {
                   : "text-slate-500"
               }`}
             >
-              {f === "all" ? "All" : f}
+              {f === "all" ? t("common.all") : statusLabel(locale, f)}
             </button>
           ))}
         </div>

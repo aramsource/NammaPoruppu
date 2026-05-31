@@ -38,6 +38,49 @@ export default function DataSourcesPage() {
             </a>{" "}
             (source: livingatlas.esri.in, public domain).
           </li>
+          <li>
+            Chennai MLAs (2026 Tamil Nadu assembly election results) from{" "}
+            <a
+              href="https://data.opencity.in/dataset/tamil-nadu-final-results-2026"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-700 hover:underline"
+            >
+              OpenCity.in
+            </a>{" "}
+            (ECI). Ward→assembly constituency mapping from OpenCity assembly boundary maps.
+            MLA profile photos from{" "}
+            <a
+              href="https://www.myneta.info/TamilNadu2026/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-700 hover:underline"
+            >
+              MyNeta
+            </a>{" "}
+            (ADR / ECI affidavits).
+          </li>
+          <li>
+            Chennai GCC ward councillors (2022 local body election results) from{" "}
+            <a
+              href="https://github.com/elseasama/OpenDataChennai"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-700 hover:underline"
+            >
+              OpenDataChennai
+            </a>{" "}
+            /{" "}
+            <a
+              href="https://data.opencity.in/dataset/chennai-gcc-elections-data-2022"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-700 hover:underline"
+            >
+              OpenCity.in
+            </a>
+            . MyNeta does not publish Chennai 2022 councillor photos; placeholder avatars are used.
+          </li>
           <li>User-submitted civic reports, photos, and support signals.</li>
         </ul>
       </div>

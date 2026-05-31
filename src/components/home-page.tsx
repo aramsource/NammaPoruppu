@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { issueCategories, Report, Ward } from "@/lib/domain";
 import { useCity } from "@/context/city-context";
+import { useTranslation } from "@/context/language-context";
+import { categoryLabel } from "@/lib/i18n";
 import { supabaseClient } from "@/lib/supabase/client";
 
 const CAT_ICON: Record<string, string> = {
@@ -19,28 +21,10 @@ const CAT_ICON: Record<string, string> = {
   Other: "📌",
 };
 
-const steps = [
-  {
-    num: "01",
-    title: "Spot an issue",
-    desc: "Take a photo and let your GPS do the rest. Takes less than a minute.",
-    numBg: "bg-brand-600",
-    cardBg: "bg-brand-50 ring-brand-100",
-  },
-  {
-    num: "02",
-    title: "Submit & gain support",
-    desc: "Post your report publicly. Neighbours upvote to amplify priority.",
-    numBg: "bg-accent-600",
-    cardBg: "bg-accent-50 ring-accent-100",
-  },
-  {
-    num: "03",
-    title: "Track accountability",
-    desc: "See which official is responsible and escalate if it stays unresolved.",
-    numBg: "bg-emerald-600",
-    cardBg: "bg-emerald-50 ring-emerald-100",
-  },
+const stepsMeta = [
+  { num: "01", numBg: "bg-brand-600", cardBg: "bg-brand-50 ring-brand-100", titleKey: "home.step1Title", descKey: "home.step1Desc" },
+  { num: "02", numBg: "bg-accent-600", cardBg: "bg-accent-50 ring-accent-100", titleKey: "home.step2Title", descKey: "home.step2Desc" },
+  { num: "03", numBg: "bg-emerald-600", cardBg: "bg-emerald-50 ring-emerald-100", titleKey: "home.step3Title", descKey: "home.step3Desc" },
 ];
 
 type WardApiRow = {
@@ -54,6 +38,7 @@ type WardApiRow = {
 
 export function HomePage() {
   const { city, cityReady } = useCity();
+  const { t, locale } = useTranslation();
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [reportsSource, setReportsSource] = useState<Report[]>([]);
@@ -250,23 +235,23 @@ export function HomePage() {
         <div className="relative mx-auto max-w-5xl px-4 pt-12 pb-12 md:pt-28 md:pb-20">
           {loadError ? (
             <p className="mb-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              Live data unavailable: {loadError}
+              {t("home.liveDataUnavailable", { error: loadError })}
             </p>
           ) : null}
           <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white ring-1 ring-amber-300/25">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-            {city.name} · Live
+            {city.name} · {t("city.live")}
           </div>
 
           <h1 className="mt-5 font-black leading-[0.98] tracking-tight text-white md:mt-7 md:leading-[1.05]">
-            <span className="block text-[4.1rem] md:text-8xl lg:text-[6.5rem]">Namma City.</span>
+            <span className="block text-[4.1rem] md:text-8xl lg:text-[6.5rem]">{t("home.heroLine1")}</span>
             <span className="mt-2 inline-block -rotate-1 rounded-2xl bg-brand-600 px-4 py-1.5 text-[3.5rem] md:mt-3 md:px-5 md:py-2 md:text-7xl lg:text-[5.5rem]">
-              Namma Poruppu.
+              {t("home.heroLine2")}
             </span>
           </h1>
 
           <p className="mt-6 max-w-md text-[1.05rem] font-medium leading-relaxed text-white/90 md:mt-7 md:text-lg">
-            Report civic problems, build community pressure, and track who&apos;s responsible for fixing them right here in {city.name}.
+            {t("home.heroSubtitle", { city: city.name })}
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-3 md:mt-8 md:gap-4">
@@ -277,13 +262,13 @@ export function HomePage() {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Report an Issue
+              {t("home.reportAnIssue")}
             </Link>
             <Link
               href="/explore-map"
               className="flex items-center gap-2 text-base font-bold text-white/75 transition hover:text-white md:text-sm"
             >
-              Explore the map
+              {t("home.exploreTheMap")}
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
               </svg>
@@ -297,19 +282,19 @@ export function HomePage() {
       <section className="border-y border-white/10 bg-slate-900">
         <div className="mx-auto max-w-5xl px-4 py-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-white/55">Live civic proof · {city.name}</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white/55">{t("home.civicProof", { city: city.name })}</p>
             {latestDataAt ? (
-              <p className="text-[11px] text-slate-400">Last updated: {latestDataAt}</p>
+              <p className="text-[11px] text-slate-400">{t("home.lastUpdated", { time: latestDataAt })}</p>
             ) : loading ? (
-              <p className="text-[11px] text-slate-400">Loading…</p>
+              <p className="text-[11px] text-slate-400">{t("common.loading")}</p>
             ) : null}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4">
             {[
-              { label: "Latest reports", value: latestReports, color: "text-amber-300" },
-              { label: "Resolved this week", value: resolvedThisWeek, color: "text-emerald-400" },
-              { label: "Ward coverage", value: `${activeWardStats.length}`, color: "text-accent-300" },
-              { label: "Community supports", value: `${totalSupport}+`, color: "text-brand-300" },
+              { label: t("home.latestReports"), value: latestReports, color: "text-amber-300" },
+              { label: t("home.resolvedThisWeek"), value: resolvedThisWeek, color: "text-emerald-400" },
+              { label: t("home.wardCoverage"), value: `${activeWardStats.length}`, color: "text-accent-300" },
+              { label: t("home.communitySupports"), value: `${totalSupport}+`, color: "text-brand-300" },
             ].map((s, i) => (
               <div
                 key={s.label}
@@ -321,7 +306,7 @@ export function HomePage() {
             ))}
           </div>
           <div className="mt-3 rounded-xl border text-center border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-            Verification: reports are public, ward-linked, and visible with status changes to keep civic follow-up transparent.
+            {t("home.verificationNote")}
           </div>
         </div>
       </section>
@@ -331,20 +316,20 @@ export function HomePage() {
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
             <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">
-              How it works
+              {t("home.howItWorks")}
             </span>
             <h2 className="mt-4 text-3xl font-black text-white md:text-4xl">
-              Three steps to<br />civic accountability.
+              {t("home.howItWorksTitle")}
             </h2>
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            {steps.map((s) => (
+            {stepsMeta.map((s) => (
               <div key={s.num} className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
                 <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-black text-white ${s.numBg}`}>
                   {s.num}
                 </span>
-                <h3 className="mt-4 text-base font-black text-white">{s.title}</h3>
-                <p className="mt-1.5 text-sm text-slate-400">{s.desc}</p>
+                <h3 className="mt-4 text-base font-black text-white">{t(s.titleKey)}</h3>
+                <p className="mt-1.5 text-sm text-slate-400">{t(s.descKey)}</p>
               </div>
             ))}
           </div>
@@ -357,13 +342,13 @@ export function HomePage() {
           <div className="flex items-start justify-between">
             <div>
               <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
-                Live updates
+                {t("home.liveUpdates")}
               </span>
-              <h2 className="mt-3 text-3xl font-black text-slate-900 md:text-4xl">🔥 Trending Issues</h2>
-              <p className="mt-1 text-sm text-slate-500">Most supported open reports in {city.name} right now.</p>
+              <h2 className="mt-3 text-3xl font-black text-slate-900 md:text-4xl">{t("home.trendingIssues")}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t("home.trendingSubtitle", { city: city.name })}</p>
             </div>
             <Link href="/explore-map" className="mt-1 flex shrink-0 items-center gap-1 text-sm font-bold text-accent-600 hover:underline">
-              View all
+              {t("common.viewAll")}
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
               </svg>
@@ -381,17 +366,17 @@ export function HomePage() {
                 </span>
                 <span className="text-2xl">{CAT_ICON[r.category] ?? "📌"}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-black text-slate-900">{r.category}</p>
+                  <p className="truncate font-black text-slate-900">{categoryLabel(locale, r.category)}</p>
                   <p className="truncate text-xs text-slate-400">{r.address}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-black text-brand-600">{r.supportCount} supports</p>
+                  <p className="text-sm font-black text-brand-600">{r.supportCount} {t("common.supports")}</p>
                   <p className="text-[11px] text-slate-400">{r.governance.wardName}</p>
                 </div>
               </Link>
             )) : (
               <p className="rounded-2xl bg-slate-50 px-5 py-8 text-center text-sm text-slate-400">
-                {loading ? "Loading issues…" : `No open issues in ${city.name} yet. Be the first to report one!`}
+                {loading ? t("home.loadingIssues") : t("home.noOpenIssues", { city: city.name })}
               </p>
             )}
           </div>
@@ -404,13 +389,13 @@ export function HomePage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">
-                Accountability data
+                {t("home.accountabilityData")}
               </span>
-              <h2 className="mt-3 text-3xl font-black text-white md:text-4xl">📊 Ward Performance</h2>
-              <p className="mt-1 text-sm text-slate-500">Resolution metrics across monitored wards in {city.name}.</p>
+              <h2 className="mt-3 text-3xl font-black text-white md:text-4xl">{t("home.wardPerformance")}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t("home.wardPerformanceSubtitle", { city: city.name })}</p>
             </div>
             <span className="rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-black text-emerald-400">
-              {resolutionRate}% resolved city-wide
+              {t("home.resolvedCityWide", { rate: resolutionRate })}
             </span>
           </div>
 
@@ -419,8 +404,8 @@ export function HomePage() {
               <div className="flex items-center gap-2 mb-5">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600/20 text-base">🔴</span>
                 <div>
-                  <p className="text-sm font-black text-white">Needs Attention</p>
-                  <p className="text-[11px] text-slate-500">Lowest resolution rates</p>
+                  <p className="text-sm font-black text-white">{t("home.needsAttention")}</p>
+                  <p className="text-[11px] text-slate-500">{t("home.lowestResolution")}</p>
                 </div>
               </div>
               <div className="space-y-4">
@@ -438,7 +423,7 @@ export function HomePage() {
                     </p>
                   </Link>
                 ))}
-                {worstWards.length === 0 && <p className="text-sm text-slate-500">{loading ? "Loading…" : "No data yet."}</p>}
+                {worstWards.length === 0 && <p className="text-sm text-slate-500">{loading ? t("common.loading") : t("home.noDataYet")}</p>}
               </div>
             </div>
 
@@ -446,8 +431,8 @@ export function HomePage() {
               <div className="flex items-center gap-2 mb-5">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-base">🟢</span>
                 <div>
-                  <p className="text-sm font-black text-white">Top Performers</p>
-                  <p className="text-[11px] text-slate-500">Highest resolution rates</p>
+                  <p className="text-sm font-black text-white">{t("home.topPerformers")}</p>
+                  <p className="text-[11px] text-slate-500">{t("home.highestResolution")}</p>
                 </div>
               </div>
               <div className="space-y-4">
@@ -465,18 +450,18 @@ export function HomePage() {
                     </p>
                   </Link>
                 ))}
-                {bestWards.length === 0 && <p className="text-sm text-slate-500">{loading ? "Loading…" : "No data yet."}</p>}
+                {bestWards.length === 0 && <p className="text-sm text-slate-500">{loading ? t("common.loading") : t("home.noDataYet")}</p>}
               </div>
             </div>
           </div>
 
           <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 border-b border-white/10 px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              <span>Ward</span>
-              <span className="text-right">Total</span>
-              <span className="text-right">Open</span>
-              <span className="text-right">Resolved</span>
-              <span className="text-right">Rate</span>
+              <span>{t("home.ward")}</span>
+              <span className="text-right">{t("common.total")}</span>
+              <span className="text-right">{t("common.open")}</span>
+              <span className="text-right">{t("common.resolved")}</span>
+              <span className="text-right">{t("home.rate")}</span>
             </div>
             {wardTableRows.map((ws) => (
               <Link
@@ -501,19 +486,19 @@ export function HomePage() {
               </Link>
             ))}
             {wardTableRows.length === 0 && (
-              <p className="px-5 py-6 text-sm text-slate-500">{loading ? "Loading ward data…" : "No ward-level reports yet."}</p>
+              <p className="px-5 py-6 text-sm text-slate-500">{loading ? t("home.loadingWardData") : t("home.noWardReports")}</p>
             )}
           </div>
 
           {catStats.length > 0 && (
             <div className="mt-4 rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-              <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-4">Issues by Category</h3>
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-4">{t("home.issuesByCategory")}</h3>
               <div className="space-y-3">
                 {catStats.map((c) => {
                   const maxTotal = Math.max(...catStats.map((x) => x.total));
                   return (
                     <div key={c.cat} className="flex items-center gap-3">
-                      <span className="w-32 shrink-0 text-xs font-medium text-slate-400 truncate">{c.cat}</span>
+                      <span className="w-32 shrink-0 text-xs font-medium text-slate-400 truncate">{categoryLabel(locale, c.cat)}</span>
                       <div className="flex-1 relative h-4 overflow-hidden rounded-full bg-white/10">
                         <div className="absolute inset-y-0 left-0 rounded-full bg-brand-500/50" style={{ width: `${(c.total / maxTotal) * 100}%` }} />
                         <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-500" style={{ width: `${(c.resolved / maxTotal) * 100}%` }} />
@@ -524,8 +509,8 @@ export function HomePage() {
                 })}
               </div>
               <div className="mt-4 flex items-center gap-4 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> Resolved</span>
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-brand-500/50 inline-block" /> Open</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> {t("home.resolvedLegend")}</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-brand-500/50 inline-block" /> {t("home.openLegend")}</span>
               </div>
             </div>
           )}
@@ -536,13 +521,13 @@ export function HomePage() {
       <section className="bg-accent-600 px-4 py-16 md:py-20">
         <div className="mx-auto max-w-2xl text-center text-white">
           <span className="inline-block rounded-full bg-amber-300/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-100">
-            Your city needs you
+            {t("home.ctaEyebrow")}
           </span>
           <h2 className="mt-5 text-4xl font-black leading-tight md:text-5xl">
-            See a problem?<br />Be the change.
+            {t("home.ctaTitle")}
           </h2>
           <p className="mt-4 text-accent-200">
-            Report it in under 60 seconds and get the right official notified in {city.name}.
+            {t("home.ctaSubtitle", { city: city.name })}
           </p>
           <Link
             href="/report-issue"
@@ -551,7 +536,7 @@ export function HomePage() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Report Now
+            {t("common.reportNow")}
           </Link>
         </div>
       </section>
