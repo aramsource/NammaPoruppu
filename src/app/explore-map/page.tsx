@@ -16,7 +16,7 @@ import { getEscalationSteps, getResponsibilityForCategory } from "@/lib/responsi
 import { useCity } from "@/context/city-context";
 import { useAuth } from "@/context/auth-context";
 import { supabaseClient } from "@/lib/supabase/client";
-import { getContactForCategory, CIVIC_CONTACTS } from "@/lib/civic-contacts";
+import { getContactForCategory, getContactsForCity } from "@/lib/civic-contacts";
 
 const IssueMapView = dynamic(
   () => import("@/components/issue-map-view").then((m) => m.IssueMapView),
@@ -87,9 +87,10 @@ function localityPlaceRank(placeType: string | null | undefined) {
 }
 
 /** For twitter intent `hashtags=` — comma-separated, no # prefix. */
-function shareHashtagsForCategory(category: string) {
+function shareHashtagsForCategory(category: string, cityName: string) {
   const typeTag = category.replace(/[^a-zA-Z0-9]/g, "") || "CivicIssue";
-  return `NammaPoruppu,Chennai,${typeTag}`;
+  const cityTag = cityName.replace(/[^a-zA-Z0-9]/g, "") || "TamilNadu";
+  return `NammaPoruppu,${cityTag},${typeTag}`;
 }
 
 export default function ExploreMapPage() {
@@ -155,6 +156,15 @@ export default function ExploreMapPage() {
   const wardsSource = liveWards ?? [];
 
   useEffect(() => {
+    setActiveWardId(null);
+    setSelectedReportId(null);
+    setDrawerOpen(false);
+    setLiveReports(null);
+    setLiveWards(null);
+    setLiveRepresentatives(null);
+  }, [city.id]);
+
+  useEffect(() => {
     let mounted = true;
     async function loadSupabaseData() {
       try {
@@ -162,6 +172,7 @@ export default function ExploreMapPage() {
           supabaseClient
             .from("reports")
             .select("id, category, description, lat, lng, display_address, neighbourhood, status, support_count, created_at, ward_id, reporter_user_id, reporter_session_id")
+            .eq("city_id", city.id)
             .neq("status", "withdrawn"),
           supabaseClient
             .from("representatives")
@@ -170,7 +181,7 @@ export default function ExploreMapPage() {
             .from("report_images")
             .select("report_id, image_url, image_kind, created_at")
             .order("created_at", { ascending: true }),
-          fetch("/api/wards", { cache: "no-store" }),
+          fetch(`/api/wards?cityId=${encodeURIComponent(city.id)}`, { cache: "no-store" }),
           supabaseClient
             .from("ward_localities")
             .select("ward_id, locality_name, is_verified, place_type")
@@ -191,6 +202,7 @@ export default function ExploreMapPage() {
         if (wardsApiPayload.error) throw new Error(wardsApiPayload.error);
         const wards: Ward[] = wardsApiPayload.data ?? [];
         const wardMap = new Map(wards.map((w) => [w.id, w]));
+        const wardIds = new Set(wards.map((w) => w.id));
         if (mounted) setLiveWards(wards);
 
         if (mounted && reportsRes.data) {
@@ -299,7 +311,9 @@ export default function ExploreMapPage() {
         }
 
         if (mounted && repsRes.data) {
-          const reps: Representative[] = repsRes.data.map((r) => ({
+          const reps: Representative[] = repsRes.data
+            .filter((r) => wardIds.has(r.ward_id))
+            .map((r) => ({
             id: r.id,
             wardId: r.ward_id,
             name: r.name,
@@ -322,7 +336,7 @@ export default function ExploreMapPage() {
     }
     loadSupabaseData();
     return () => { mounted = false; };
-  }, []);
+  }, [city.id]);
 
   // ── Helpers ──
   const getStatus = (id: string, fallback: ReportStatus) => resolvedOverrides[id] ?? fallback;
@@ -708,7 +722,7 @@ export default function ExploreMapPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2 md:gap-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
-              Chennai · Live
+              {city.name} · Live
             </div>
             <h1 className="text-base font-black tracking-tight text-white md:text-lg">Explore the map</h1>
           </div>
@@ -1639,7 +1653,7 @@ export default function ExploreMapPage() {
               const reportUrl = `${origin}/explore-map?reportId=${report.id}&wardId=${report.governance.wardId}`;
 
               // Fallback department contact based on issue category
-              const deptContact = getContactForCategory(report.category);
+              const deptContact = getContactForCategory(report.category, city.id);
 
               // Build pre-filled message (works for both ward rep and dept contact)
               function buildMsg(recipientName: string) {
@@ -1680,13 +1694,14 @@ export default function ExploreMapPage() {
                 : null;
 
               // Social share message
-              const shareText = `Civic issue in ${report.governance.wardName}, Chennai: ${report.category} at ${report.address}. Help resolve this!`;
+              const shareText = `Civic issue in ${report.governance.wardName}, ${city.name}: ${report.category} at ${report.address}. Help resolve this!`;
               const typeTag = report.category.replace(/[^a-zA-Z0-9]/g, "") || "CivicIssue";
-              const shareTagsLine = `#NammaPoruppu #Chennai #${typeTag}`;
+              const cityTag = city.name.replace(/[^a-zA-Z0-9]/g, "") || "TamilNadu";
+              const shareTagsLine = `#NammaPoruppu #${cityTag} #${typeTag}`;
               const waShareHref = `https://wa.me/?text=${encodeURIComponent(
                 `${shareText}\n\nView & support: ${reportUrl}\n\n${shareTagsLine}`,
               )}`;
-              const twitterHashtags = shareHashtagsForCategory(report.category);
+              const twitterHashtags = shareHashtagsForCategory(report.category, city.name);
               const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(reportUrl)}&hashtags=${twitterHashtags}`;
 
               const officialAmplifyBody = [
@@ -1847,7 +1862,7 @@ export default function ExploreMapPage() {
                             <p className="text-[11px] text-slate-400">Escalate via CM Helpline</p>
                           </div>
                           <a
-                            href={`tel:${CIVIC_CONTACTS.cm_helpline.helpline}`}
+                            href={`tel:${getContactsForCity(city.id).cm_helpline.helpline}`}
                             className="rounded-full bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-brand-700"
                           >
                             Call 1100

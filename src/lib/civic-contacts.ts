@@ -1,35 +1,18 @@
 import { IssueCategory } from "@/lib/domain";
+import { DEFAULT_CITY } from "@/lib/cities";
 
 export type CivicContact = {
   id: string;
   name: string;
   shortName: string;
   helpline: string;
-  whatsapp?: string;   // full number with country code, e.g. "919444000512"
+  whatsapp?: string;
   email?: string;
   website?: string;
   description: string;
 };
 
-export const CIVIC_CONTACTS: Record<string, CivicContact> = {
-  gcc: {
-    id: "gcc",
-    name: "Greater Chennai Corporation",
-    shortName: "GCC",
-    helpline: "1913",
-    email: "commr.gcc@gmail.com",
-    website: "https://www.chennaicorporation.gov.in",
-    description: "Roads, garbage, drainage, footpaths, encroachment",
-  },
-  cmwssb: {
-    id: "cmwssb",
-    name: "Chennai Metro Water (CMWSSB)",
-    shortName: "CMWSSB",
-    helpline: "45674567",
-    whatsapp: "919444000512",
-    website: "https://www.chennaimetrowater.tn.gov.in",
-    description: "Water supply, sewage, drainage leaks",
-  },
+const SHARED: Record<string, CivicContact> = {
   tangedco: {
     id: "tangedco",
     name: "TANGEDCO",
@@ -47,21 +30,90 @@ export const CIVIC_CONTACTS: Record<string, CivicContact> = {
   },
 };
 
-// Maps each issue category to the most relevant department
-const CATEGORY_CONTACT_MAP: Record<IssueCategory, string> = {
-  Pothole:           "gcc",
-  Garbage:           "gcc",
-  "Broken Footpath": "gcc",
-  "Dust Pollution":  "gcc",
-  Encroachment:      "gcc",
-  Waterlogging:      "cmwssb",
-  "Sewage Leak":     "cmwssb",
-  Drainage:          "cmwssb",
-  "Streetlight Issue": "tangedco",
-  Other:             "gcc",
+const CITY_CONTACTS: Record<string, Record<string, CivicContact>> = {
+  chennai: {
+    corp: {
+      id: "corp",
+      name: "Greater Chennai Corporation",
+      shortName: "GCC",
+      helpline: "1913",
+      email: "commr.gcc@gmail.com",
+      website: "https://www.chennaicorporation.gov.in",
+      description: "Roads, garbage, drainage, footpaths, encroachment",
+    },
+    water: {
+      id: "water",
+      name: "Chennai Metro Water (CMWSSB)",
+      shortName: "CMWSSB",
+      helpline: "45674567",
+      whatsapp: "919444000512",
+      website: "https://www.chennaimetrowater.tn.gov.in",
+      description: "Water supply, sewage, drainage leaks",
+    },
+    ...SHARED,
+  },
+  coimbatore: {
+    corp: {
+      id: "corp",
+      name: "Coimbatore City Municipal Corporation",
+      shortName: "CCMC",
+      helpline: "0422-2390261",
+      website: "https://coimbatorecorp.tn.gov.in",
+      description: "Roads, garbage, drainage, footpaths, encroachment",
+    },
+    water: {
+      id: "water",
+      name: "Coimbatore City Municipal Corporation (Water & Sewage)",
+      shortName: "CCMC Water",
+      helpline: "0422-2390261",
+      website: "https://coimbatorecorp.tn.gov.in",
+      description: "Water supply, sewage, drainage leaks",
+    },
+    ...SHARED,
+  },
+  madurai: {
+    corp: {
+      id: "corp",
+      name: "Madurai City Municipal Corporation",
+      shortName: "MCMC",
+      helpline: "0452-2531401",
+      website: "https://maduraicorporation.co.in",
+      description: "Roads, garbage, drainage, footpaths, encroachment",
+    },
+    water: {
+      id: "water",
+      name: "Madurai City Municipal Corporation (Water & Sewage)",
+      shortName: "MCMC Water",
+      helpline: "0452-2531401",
+      website: "https://maduraicorporation.co.in",
+      description: "Water supply, sewage, drainage leaks",
+    },
+    ...SHARED,
+  },
 };
 
-export function getContactForCategory(category: string): CivicContact {
-  const key = CATEGORY_CONTACT_MAP[category as IssueCategory] ?? "gcc";
-  return CIVIC_CONTACTS[key];
+/** @deprecated Use getContactsForCity */
+export const CIVIC_CONTACTS = CITY_CONTACTS.chennai;
+
+const CATEGORY_CONTACT_MAP: Record<IssueCategory, "corp" | "water" | "tangedco"> = {
+  Pothole: "corp",
+  Garbage: "corp",
+  "Broken Footpath": "corp",
+  "Dust Pollution": "corp",
+  Encroachment: "corp",
+  Waterlogging: "water",
+  "Sewage Leak": "water",
+  Drainage: "water",
+  "Streetlight Issue": "tangedco",
+  Other: "corp",
+};
+
+export function getContactsForCity(cityId: string = DEFAULT_CITY.id) {
+  return CITY_CONTACTS[cityId] ?? CITY_CONTACTS.chennai;
+}
+
+export function getContactForCategory(category: string, cityId: string = DEFAULT_CITY.id): CivicContact {
+  const contacts = getContactsForCity(cityId);
+  const key = CATEGORY_CONTACT_MAP[category as IssueCategory] ?? "corp";
+  return contacts[key] ?? contacts.corp;
 }

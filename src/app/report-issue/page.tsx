@@ -4,8 +4,10 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { PageBody, PageHero } from "@/components/site-page-shell";
-import { DEFAULT_CITY } from "@/lib/cities";
+import { useCity } from "@/context/city-context";
+import { City } from "@/lib/cities";
 import { issueCategories } from "@/lib/domain";
+import { isWithinCityBounds } from "@/lib/ward-geo-client";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
 
@@ -76,16 +78,15 @@ type SearchLocationResult = {
   lng: number;
 };
 
-function isWithinChennaiBounds(lat: number, lng: number): boolean {
-  const [[swLat, swLng], [neLat, neLng]] = DEFAULT_CITY.bounds;
-  return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
+function isWithinSelectedCityBounds(city: City, lat: number, lng: number): boolean {
+  return isWithinCityBounds(city, lat, lng);
 }
 
-async function searchLocationByText(query: string): Promise<SearchLocationResult[]> {
+async function searchLocationByText(query: string, cityName: string): Promise<SearchLocationResult[]> {
   if (!query.trim()) return [];
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}&addressdetails=1`,
+      `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(`${query}, ${cityName}`)}&addressdetails=1`,
       { headers: { "Accept-Language": "en" } },
     );
     if (!res.ok) return [];
@@ -105,6 +106,7 @@ async function searchLocationByText(query: string): Promise<SearchLocationResult
 
 export default function ReportIssuePage() {
   const { user, session, loading } = useAuth();
+  const { city } = useCity();
   const [step, setStep] = useState<Step>("form");
   const [reportRef, setReportRef] = useState("");
   const [submittedReportId, setSubmittedReportId] = useState("");
@@ -181,8 +183,8 @@ export default function ReportIssuePage() {
 
   async function applyMapSelection() {
     if (!mapPickPoint) return;
-    if (!isWithinChennaiBounds(mapPickPoint.lat, mapPickPoint.lng)) {
-      setMapPickerError("Selected pin is outside Chennai. Please choose a location within Chennai.");
+    if (!isWithinSelectedCityBounds(city, mapPickPoint.lat, mapPickPoint.lng)) {
+      setMapPickerError(`Selected pin is outside ${city.name}. Please choose a location within ${city.name}.`);
       return;
     }
     setLocStage("geocoding");
@@ -210,13 +212,15 @@ export default function ReportIssuePage() {
     const q = mapSearchQuery.trim();
     if (!q) return;
     setMapSearchLoading(true);
-    const results = (await searchLocationByText(q)).filter((r) => isWithinChennaiBounds(r.lat, r.lng));
+    const results = (await searchLocationByText(q, city.name)).filter((r) =>
+      isWithinSelectedCityBounds(city, r.lat, r.lng),
+    );
     setMapSearchResults(results);
     if (results[0]) {
       setMapPickPoint({ lat: results[0].lat, lng: results[0].lng });
       setMapPickerError("");
     } else {
-      setMapPickerError("No Chennai matches found. Search with a Chennai area or landmark.");
+      setMapPickerError(`No ${city.name} matches found. Search with a local area or landmark.`);
     }
     setMapSearchLoading(false);
   }
@@ -282,8 +286,8 @@ export default function ReportIssuePage() {
     setSubmitting(true);
     const reportRefVal = `NP-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     try {
-      const lat = location?.lat ?? 13.0475;
-      const lng = location?.lng ?? 80.2272;
+      const lat = location?.lat ?? city.center[0];
+      const lng = location?.lng ?? city.center[1];
       const sessionId =
         localStorage.getItem("np_session_id") ??
         `sess_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
@@ -296,7 +300,7 @@ export default function ReportIssuePage() {
           Authorization: `Bearer ${session?.access_token ?? ""}`,
         },
         body: JSON.stringify({
-          cityId: "chennai",
+          cityId: city.id,
           category,
           description: description || null,
           displayAddress: effectiveAddress || "Location provided by user",
@@ -636,8 +640,8 @@ export default function ReportIssuePage() {
                         key={`${r.lat}-${r.lng}-${idx}`}
                         type="button"
                         onClick={() => {
-                          if (!isWithinChennaiBounds(r.lat, r.lng)) {
-                            setMapPickerError("This place is outside Chennai. Pick a Chennai location.");
+                          if (!isWithinSelectedCityBounds(city, r.lat, r.lng)) {
+                            setMapPickerError(`This place is outside ${city.name}. Pick a location in ${city.name}.`);
                             return;
                           }
                           setMapPickPoint({ lat: r.lat, lng: r.lng });
@@ -652,7 +656,7 @@ export default function ReportIssuePage() {
                   </div>
                 )}
                 <div className="mt-2 overflow-hidden rounded-lg ring-1 ring-slate-200">
-                  <IssueLocationMap mapPickPoint={mapPickPoint} onPick={setMapPickPoint} />
+                  <IssueLocationMap city={city} mapPickPoint={mapPickPoint} onPick={setMapPickPoint} />
                 </div>
                 {mapPickerError ? (
                   <p className="mt-2 text-[11px] font-semibold text-brand-600">{mapPickerError}</p>

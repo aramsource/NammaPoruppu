@@ -3,7 +3,7 @@ import { PageBody, PageHero } from "@/components/site-page-shell";
 
 export const metadata: Metadata = {
   title: "Data Sources",
-  description: "Learn about the data sources used by NammaPoruppu to map civic issues and ward boundaries across Chennai.",
+  description: "Learn about the data sources used by NammaPoruppu to map civic issues and ward boundaries across Tamil Nadu cities.",
 };
 
 export default function DataSourcesPage() {
@@ -23,7 +23,21 @@ export default function DataSourcesPage() {
         </p>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-600">
           <li>OpenStreetMap (locality and geospatial reference data).</li>
-          <li>Greater Chennai Corporation ward boundaries and ward metadata.</li>
+          <li>
+            Greater Chennai Corporation ward boundaries and ward metadata (Chennai).
+          </li>
+          <li>
+            Coimbatore and Madurai municipal ward boundaries (2024 delimitation) from{" "}
+            <a
+              href="https://data.opencity.in/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-700 hover:underline"
+            >
+              OpenCity.in
+            </a>{" "}
+            (source: livingatlas.esri.in, public domain).
+          </li>
           <li>User-submitted civic reports, photos, and support signals.</li>
         </ul>
       </div>

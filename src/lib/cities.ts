@@ -36,7 +36,7 @@ export const CITIES: City[] = [
     ],
     defaultZoom: 12,
     minZoom: 11,
-    active: false,
+    active: true,
   },
   {
     id: "madurai",
@@ -49,20 +49,32 @@ export const CITIES: City[] = [
     ],
     defaultZoom: 13,
     minZoom: 12,
-    active: false,
+    active: true,
   },
 ];
 
 export const DEFAULT_CITY = CITIES[0]; // Chennai
 
-/** Find a city by approximate lat/lng */
+export function getCityById(id: string): City {
+  return CITIES.find((c) => c.id === id) ?? DEFAULT_CITY;
+}
+
+export const ACTIVE_CITIES = CITIES.filter((c) => c.active);
+
+function isWithinBounds(city: City, lat: number, lng: number) {
+  const [[swLat, swLng], [neLat, neLng]] = city.bounds;
+  return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
+}
+
+function bboxArea(city: City) {
+  const [[swLat, swLng], [neLat, neLng]] = city.bounds;
+  return (neLat - swLat) * (neLng - swLng);
+}
+
+/** Find a city by approximate lat/lng (smallest matching bbox wins). */
 export function detectCityFromCoords(lat: number, lng: number): City {
-  const match = CITIES.find(
-    (c) =>
-      lat >= c.bounds[0][0] &&
-      lat <= c.bounds[1][0] &&
-      lng >= c.bounds[0][1] &&
-      lng <= c.bounds[1][1],
+  const matches = CITIES.filter((c) => isWithinBounds(c, lat, lng)).sort(
+    (a, b) => bboxArea(a) - bboxArea(b),
   );
-  return match ?? DEFAULT_CITY;
+  return matches[0] ?? DEFAULT_CITY;
 }

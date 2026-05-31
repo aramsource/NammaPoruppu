@@ -1,71 +1,22 @@
 import { NextRequest } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { created, ok, badRequest } from "@/lib/http";
 import { issueCategories } from "@/lib/domain";
+import { getCityById } from "@/lib/cities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveWardNumberFromPoint } from "@/lib/ward-geo-server";
 
-type GeoWardFeature = {
-  type: "Feature";
-  properties: { Ward_No?: number | string };
-  geometry: {
-    type: "Polygon" | "MultiPolygon";
-    coordinates: number[][][] | number[][][][];
-  };
-};
-type GeoWardCollection = { type: "FeatureCollection"; features: GeoWardFeature[] };
-
-let geoCache: GeoWardCollection | null = null;
-
-async function getWardGeoJson() {
-  if (geoCache) return geoCache;
-  const fp = path.join(process.cwd(), "public", "data", "chennai-wards.geojson");
-  const raw = await readFile(fp, "utf-8");
-  geoCache = JSON.parse(raw) as GeoWardCollection;
-  return geoCache;
-}
-
-function pointInRing(lat: number, lng: number, ring: number[][]) {
-  // ring points are [lng, lat]
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    const intersect =
-      yi > lat !== yj > lat &&
-      lng < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
-function pointInFeature(lat: number, lng: number, feature: GeoWardFeature) {
-  if (feature.geometry.type === "Polygon") {
-    const rings = feature.geometry.coordinates as number[][][];
-    return rings.some((ring) => pointInRing(lat, lng, ring));
-  }
-  const polygons = feature.geometry.coordinates as number[][][][];
-  return polygons.some((poly) => poly.some((ring) => pointInRing(lat, lng, ring)));
-}
-
-async function resolveWardIdFromPoint(lat: number, lng: number) {
-  try {
-    const geo = await getWardGeoJson();
-    const match = geo.features.find((f) => pointInFeature(lat, lng, f));
-    if (!match) return null;
-    return Number(match.properties?.Ward_No ?? 0);
-  } catch {
-    return null;
-  }
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const cityId = request.nextUrl.searchParams.get("cityId");
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("reports")
     .select("*")
     .neq("status", "withdrawn")
     .order("created_at", { ascending: false });
+  if (cityId) {
+    query = query.eq("city_id", cityId);
+  }
+  const { data, error } = await query;
   if (error) return ok({ error: error.message }, { status: 500 });
   return ok({ data: data ?? [], total: data?.length ?? 0 });
 }
@@ -79,6 +30,8 @@ export async function POST(request: NextRequest) {
   const lat = body?.lat as number | undefined;
   const lng = body?.lng as number | undefined;
   const imageUrls = body?.imageUrls as string[] | undefined;
+  const cityId = (body?.cityId as string | undefined) ?? "chennai";
+  const city = getCityById(cityId);
 
   if (!category || !issueCategories.includes(category as (typeof issueCategories)[number])) {
     return badRequest("valid category is required");
@@ -101,14 +54,14 @@ export async function POST(request: NextRequest) {
     if (authError || !userData.user) {
       return ok({ error: "Sign in required" }, { status: 401 });
     }
-    const mappedWardNo = await resolveWardIdFromPoint(lat, lng);
+    const mappedWardNo = await resolveWardNumberFromPoint(city.id, lat, lng);
     let wardId: string | null = null;
     let returnWard: { wardId: string; wardName: string; wardNumber: number } | null = null;
     if (mappedWardNo) {
       const { data: ward } = await supabase
         .from("wards")
         .select("id, ward_name, ward_number")
-        .eq("city_id", body?.cityId ?? "chennai")
+        .eq("city_id", city.id)
         .eq("ward_number", mappedWardNo)
         .maybeSingle();
       wardId = ward?.id ?? null;
@@ -122,7 +75,7 @@ export async function POST(request: NextRequest) {
       .from("reports")
       .insert({
         report_ref: reportRef,
-        city_id: body?.cityId ?? "chennai",
+        city_id: city.id,
         ward_id: wardId,
         category,
         description: body?.description ?? null,

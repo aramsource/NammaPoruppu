@@ -21,6 +21,8 @@ type CityContextValue = {
   setCity: (city: City) => void;
   locationState: LocationState;
   detectLocation: () => void;
+  /** False until saved city is restored from localStorage. */
+  cityReady: boolean;
 };
 
 const CityContext = createContext<CityContextValue>({
@@ -28,13 +30,14 @@ const CityContext = createContext<CityContextValue>({
   setCity: () => {},
   locationState: "idle",
   detectLocation: () => {},
+  cityReady: false,
 });
 
 export function CityProvider({ children }: { children: React.ReactNode }) {
   const [city, setCityState] = useState<City>(DEFAULT_CITY);
   const [locationState, setLocationState] = useState<LocationState>("idle");
+  const [cityReady, setCityReady] = useState(false);
 
-  // Restore from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem("np_city");
@@ -43,6 +46,7 @@ export function CityProvider({ children }: { children: React.ReactNode }) {
         if (found) setCityState(found);
       }
     } catch {}
+    setCityReady(true);
   }, []);
 
   const setCity = useCallback((next: City) => {
@@ -73,7 +77,7 @@ export function CityProvider({ children }: { children: React.ReactNode }) {
   }, [setCity]);
 
   return (
-    <CityContext.Provider value={{ city, setCity, locationState, detectLocation }}>
+    <CityContext.Provider value={{ city, setCity, locationState, detectLocation, cityReady }}>
       {children}
     </CityContext.Provider>
   );

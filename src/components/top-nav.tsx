@@ -58,7 +58,7 @@ function CityPicker() {
           {/* Header */}
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-xs font-bold text-slate-900">Tamil Nadu Cities</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Coimbatore & Madurai launching soon</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Report and explore issues in your city</p>
           </div>
 
           {/* Detect location */}

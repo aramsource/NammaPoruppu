@@ -3,19 +3,15 @@
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { DEFAULT_CITY } from "@/lib/cities";
+import { City, DEFAULT_CITY } from "@/lib/cities";
+import { isWithinCityBounds } from "@/lib/ward-geo-client";
 
 type Point = { lat: number; lng: number };
 
-function isWithinChennaiBounds(lat: number, lng: number): boolean {
-  const [[swLat, swLng], [neLat, neLng]] = DEFAULT_CITY.bounds;
-  return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
-}
-
-function MapTapHandler({ onPick }: { onPick: (point: Point) => void }) {
+function MapTapHandler({ city, onPick }: { city: City; onPick: (point: Point) => void }) {
   useMapEvents({
     click: (e) => {
-      if (!isWithinChennaiBounds(e.latlng.lat, e.latlng.lng)) return;
+      if (!isWithinCityBounds(city, e.latlng.lat, e.latlng.lng)) return;
       onPick({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
@@ -32,16 +28,18 @@ function MapCenterOnPick({ point }: { point: Point | null }) {
 }
 
 export function IssueLocationMap({
+  city = DEFAULT_CITY,
   mapPickPoint,
   onPick,
 }: {
+  city?: City;
   mapPickPoint: Point | null;
   onPick: (point: Point) => void;
 }) {
   return (
     <MapContainer
-      center={mapPickPoint ? [mapPickPoint.lat, mapPickPoint.lng] : [13.0827, 80.2707]}
-      zoom={13}
+      center={mapPickPoint ? [mapPickPoint.lat, mapPickPoint.lng] : city.center}
+      zoom={city.defaultZoom}
       style={{ height: 260, width: "100%" }}
       scrollWheelZoom
       zoomControl
@@ -49,9 +47,9 @@ export function IssueLocationMap({
       doubleClickZoom
       boxZoom
       keyboard
-      minZoom={DEFAULT_CITY.minZoom}
+      minZoom={city.minZoom}
       maxZoom={18}
-      maxBounds={DEFAULT_CITY.bounds}
+      maxBounds={city.bounds}
       maxBoundsViscosity={1}
     >
       <TileLayer
@@ -59,7 +57,7 @@ export function IssueLocationMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <MapCenterOnPick point={mapPickPoint} />
-      <MapTapHandler onPick={onPick} />
+      <MapTapHandler city={city} onPick={onPick} />
       {mapPickPoint && (
         <CircleMarker
           center={[mapPickPoint.lat, mapPickPoint.lng]}

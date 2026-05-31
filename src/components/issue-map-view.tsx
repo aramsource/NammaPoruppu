@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap } from "react-leaflet";
 import { Report, Ward } from "@/lib/domain";
 import { City, DEFAULT_CITY } from "@/lib/cities";
+import { wardGeoJsonPublicPath } from "@/lib/ward-geo-client";
 
 type IssueMapViewProps = {
   reports: Report[];
@@ -154,6 +155,23 @@ function MapController({ selectedWardShape }: { selectedWardShape: WardShape | n
   return null;
 }
 
+function CityViewController({ city }: { city: City }) {
+  const map = useMap();
+  useEffect(() => {
+    const [[swLat, swLng], [neLat, neLng]] = city.bounds;
+    const bounds = L.latLngBounds([swLat, swLng], [neLat, neLng]);
+    map.setMaxBounds(bounds);
+    map.setMinZoom(city.minZoom);
+    map.flyToBounds(bounds, {
+      paddingTopLeft: [16, 120],
+      paddingBottomRight: [16, 40],
+      maxZoom: city.defaultZoom,
+      duration: 0.8,
+    });
+  }, [map, city]);
+  return null;
+}
+
 function MapZoomButtons() {
   const map = useMap();
   return (
@@ -198,12 +216,12 @@ export function IssueMapView({
 
   useEffect(() => {
     let mounted = true;
-    fetch("/data/chennai-wards.geojson")
+    fetch(wardGeoJsonPublicPath(city.id))
       .then((r) => r.json())
       .then((d: GeoWardCollection) => { if (mounted && d?.features?.length) setGeoWards(d.features); })
       .catch(() => setGeoWards([]));
     return () => { mounted = false; };
-  }, []);
+  }, [city.id]);
 
   const countByWard = useMemo(() => {
     const m = new Map<string, number>();
@@ -286,6 +304,7 @@ export function IssueMapView({
         className="h-full w-full"
       >
         <TileLayer attribution="" url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        <CityViewController city={city} />
         <MapController selectedWardShape={selectedWardShape} />
         <MapZoomButtons />
 

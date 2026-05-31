@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageBody, PageHero } from "@/components/site-page-shell";
 import { Report } from "@/lib/domain";
 import { useAuth } from "@/context/auth-context";
+import { useCity } from "@/context/city-context";
 import { supabaseClient } from "@/lib/supabase/client";
 
 const CAT_ICON: Record<string, string> = {
@@ -49,6 +50,7 @@ function getEscalationReasonLabel(reason: string | null | undefined) {
 
 export default function MyReportsPage() {
   const { user } = useAuth();
+  const { city, cityReady } = useCity();
   const [myReports, setMyReports] = useState<Report[]>([]);
   const [escalationsByReportId, setEscalationsByReportId] = useState<Record<string, EscalationInfo>>({});
   const [escalatingReportId, setEscalatingReportId] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export default function MyReportsPage() {
     return generated;
   }
   useEffect(() => {
+    if (!cityReady) return;
     let mounted = true;
     async function load() {
       try {
@@ -85,7 +88,8 @@ export default function MyReportsPage() {
         ] = await Promise.all([
           supabaseClient
             .from("reports")
-            .select("id, category, description, lat, lng, display_address, status, support_count, created_at, ward_id, reporter_user_id")
+            .select("id, category, description, lat, lng, display_address, status, support_count, created_at, ward_id, reporter_user_id, city_id")
+            .eq("city_id", city.id)
             .order("created_at", { ascending: false })
             .limit(50),
           supabaseClient
@@ -94,7 +98,8 @@ export default function MyReportsPage() {
             .order("created_at", { ascending: true }),
           supabaseClient
             .from("wards")
-            .select("id, ward_name, ward_number, zone_name, assembly_constituency"),
+            .select("id, ward_name, ward_number, zone_name, assembly_constituency, city_id")
+            .eq("city_id", city.id),
           supabaseClient
             .from("report_escalations")
             .select("id, report_id, status, created_at, reason, escalation_level, escalator_user_id")
@@ -133,7 +138,7 @@ export default function MyReportsPage() {
                 wardName: ward.ward_name,
                 wardNumber: ward.ward_number,
                 zoneName: ward.zone_name,
-                city: "Chennai",
+                city: city.name,
                 assemblyConstituency: ward.assembly_constituency ?? "Unknown",
               },
               imageUrls: imageMap.get(r.id) ?? [],
@@ -166,7 +171,7 @@ export default function MyReportsPage() {
     }
     load();
     return () => { mounted = false; };
-  }, []);
+  }, [city.id, cityReady]);
 
   async function handleEscalate(reportId: string) {
     if (escalatingReportId) return;
@@ -297,7 +302,7 @@ export default function MyReportsPage() {
       <PageHero
         eyebrow="Your activity"
         title="My Reports"
-        subtitle="Issues you&apos;ve reported in Chennai."
+        subtitle={`Issues you've reported in ${city.name}.`}
         tone="accent"
         containerWidth="2xl"
         actions={
