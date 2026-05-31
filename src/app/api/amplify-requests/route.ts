@@ -1,19 +1,9 @@
 import { badRequest, created, ok, unauthorized } from "@/lib/http";
 import { getBearerToken, getUserFromBearer } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-
-function buildSuggestedTweet(input: {
-  category: string;
-  wardLabel: string;
-  address: string;
-  reportUrl: string;
-}) {
-  const typeTag = input.category.replace(/[^a-zA-Z0-9]/g, "") || "CivicIssue";
-  const tags = `#NammaPoruppu #Chennai #${typeTag}`;
-  let line = `Civic issue (${input.category}) in ${input.wardLabel}, Chennai: ${input.address}. View & support: ${input.reportUrl} ${tags}`;
-  if (line.length > 275) line = `${line.slice(0, 272)}…`;
-  return line;
-}
+import { getResponsibilityForCategory } from "@/lib/responsibility";
+import { buildIssueTweetText, formatWardLabel } from "@/lib/issue-share";
+import type { IssueCategory } from "@/lib/domain";
 
 export async function POST(request: Request) {
   const token = getBearerToken(request);
@@ -33,7 +23,7 @@ export async function POST(request: Request) {
 
   const { data: report, error: repErr } = await admin
     .from("reports")
-    .select("id, category, display_address, ward_id")
+    .select("id, category, description, display_address, ward_id, support_count")
     .eq("id", reportId)
     .maybeSingle();
   if (repErr) return ok({ error: repErr.message }, { status: 500 });
@@ -42,20 +32,43 @@ export async function POST(request: Request) {
   let wardLabel = "Chennai";
   if (report.ward_id) {
     const { data: w } = await admin.from("wards").select("ward_name, ward_number").eq("id", report.ward_id).maybeSingle();
-    if (w?.ward_name != null && w.ward_number != null) {
-      wardLabel = `Ward ${w.ward_number} · ${w.ward_name}`;
-    } else if (w?.ward_name) {
-      wardLabel = w.ward_name;
+    if (w?.ward_name != null || w?.ward_number != null) {
+      wardLabel = formatWardLabel(w.ward_number, w.ward_name) || wardLabel;
+    }
+  }
+
+  let representative: { name: string; role: string; area?: string } | null = null;
+  if (report.ward_id) {
+    const category = String(report.category) as IssueCategory;
+    const responsibility = getResponsibilityForCategory(category);
+    const primaryRole = responsibility?.primaryRole;
+    const { data: reps } = await admin
+      .from("representatives")
+      .select("name, role, area")
+      .eq("ward_id", report.ward_id);
+    const match =
+      (primaryRole ? reps?.find((r) => r.role === primaryRole) : undefined) ?? reps?.[0] ?? null;
+    if (match) {
+      representative = {
+        name: String(match.name),
+        role: String(match.role),
+        area: match.area ? String(match.area) : undefined,
+      };
     }
   }
 
   const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://nammaporuppu.in").replace(/\/$/, "");
   const reportUrl = `${origin}/explore-map?reportId=${report.id}&wardId=${report.ward_id}`;
-  const suggested_text = buildSuggestedTweet({
+  const suggested_text = buildIssueTweetText({
     category: String(report.category),
-    wardLabel,
+    description: report.description ? String(report.description) : null,
     address: String(report.display_address ?? ""),
+    wardLabel,
+    cityId: "chennai",
+    cityName: "Chennai",
     reportUrl,
+    representative,
+    supportCount: typeof report.support_count === "number" ? report.support_count : undefined,
   });
 
   const { data: inserted, error: insErr } = await admin

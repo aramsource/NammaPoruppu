@@ -19,6 +19,8 @@ import { categoryLabel, statusLabel } from "@/lib/i18n";
 import { useAuth } from "@/context/auth-context";
 import { supabaseClient } from "@/lib/supabase/client";
 import { getContactForCategory, getContactsForCity } from "@/lib/civic-contacts";
+import { IssueSharePanel } from "@/components/issue-share-panel";
+import { buildIssueShareMessage, formatWardLabel } from "@/lib/issue-share";
 
 const IssueMapView = dynamic(
   () => import("@/components/issue-map-view").then((m) => m.IssueMapView),
@@ -96,13 +98,6 @@ function localityPlaceRank(placeType: string | null | undefined) {
   }
 }
 
-/** For twitter intent `hashtags=` — comma-separated, no # prefix. */
-function shareHashtagsForCategory(category: string, cityName: string) {
-  const typeTag = category.replace(/[^a-zA-Z0-9]/g, "") || "CivicIssue";
-  const cityTag = cityName.replace(/[^a-zA-Z0-9]/g, "") || "TamilNadu";
-  return `NammaPoruppu,${cityTag},${typeTag}`;
-}
-
 export default function ExploreMapPage() {
   const { city } = useCity();
   const { t, locale } = useTranslation();
@@ -147,7 +142,6 @@ export default function ExploreMapPage() {
   const [resolveUploadError, setResolveUploadError] = useState("");
   const [supportError, setSupportError] = useState("");
   const [selRepId, setSelRepId] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [amplifyQueueBusy, setAmplifyQueueBusy] = useState(false);
   /** Expanded media viewer inside the same drawer (no popup overlay). */
   const [expandedMedia, setExpandedMedia] = useState<{ type: "before" | "after" | null; index: number }>({
@@ -1680,7 +1674,7 @@ export default function ExploreMapPage() {
 
               // Build pre-filled message (works for both ward rep and dept contact)
               function buildMsg(recipientName: string) {
-                return [
+                const lines = [
                   `Hello ${recipientName},`,
                   "",
                   "I am reporting a civic issue via NammaPoruppu and requesting your attention.",
@@ -1689,12 +1683,39 @@ export default function ExploreMapPage() {
                   `Location: ${report.address}`,
                   `Ward: ${selectedWard?.wardName ?? ""} (Ward ${selectedWard?.wardNumber ?? ""})`,
                   `Report ID: ${report.id}`,
+                ];
+                const desc = report.description?.trim();
+                if (desc) {
+                  lines.push("", `Description: ${desc}`);
+                }
+                lines.push(
                   "",
                   `View report: ${reportUrl}`,
                   "",
                   "Please review and take necessary action. Thank you.",
-                ].join("\n");
+                );
+                return lines.join("\n");
               }
+
+              const wardLabel = formatWardLabel(
+                selectedWard?.wardNumber ?? report.governance.wardNumber,
+                selectedWard?.wardName ?? report.governance.wardName,
+              );
+
+              const shareInput = {
+                category: report.category,
+                description: report.description,
+                address: report.address,
+                wardLabel,
+                cityId: city.id,
+                cityName: city.name,
+                reportUrl,
+                representative: selectedRep
+                  ? { name: selectedRep.name, role: selectedRep.role, area: selectedRep.area }
+                  : { name: deptContact.shortName, role: deptContact.name },
+                supportCount: totalSupport,
+                imageUrls: beforeImages,
+              };
 
               // Ward representative contact hrefs
               const officialMsg = selectedRep ? buildMsg(selectedRep.name) : "";
@@ -1716,17 +1737,7 @@ export default function ExploreMapPage() {
                 ? `mailto:${deptContact.email}?subject=${encodeURIComponent(`Civic Issue - ${selectedReport.category} · Ward ${selectedWard?.wardNumber ?? ""} ${selectedWard?.wardName ?? ""}`)}&body=${encodeURIComponent(deptMsg)}`
                 : null;
 
-              // Social share message
-              const shareText = `Civic issue in ${report.governance.wardName}, ${city.name}: ${report.category} at ${report.address}. Help resolve this!`;
-              const typeTag = report.category.replace(/[^a-zA-Z0-9]/g, "") || "CivicIssue";
-              const cityTag = city.name.replace(/[^a-zA-Z0-9]/g, "") || "TamilNadu";
-              const shareTagsLine = `#NammaPoruppu #${cityTag} #${typeTag}`;
-              const waShareHref = `https://wa.me/?text=${encodeURIComponent(
-                `${shareText}\n\nView & support: ${reportUrl}\n\n${shareTagsLine}`,
-              )}`;
-              const twitterHashtags = shareHashtagsForCategory(report.category, city.name);
-              const twitterHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(reportUrl)}&hashtags=${twitterHashtags}`;
-
+              const shareMessage = buildIssueShareMessage(shareInput);
               const officialAmplifyBody = [
                 "Hi NammaPoruppu team,",
                 "",
@@ -1734,13 +1745,9 @@ export default function ExploreMapPage() {
                 "I prefer not to post from my personal X handle.",
                 "",
                 "--- Suggested post ---",
-                shareText,
-                "",
-                reportUrl,
+                shareMessage,
                 "",
                 "--- Details ---",
-                `Issue type: ${report.category}`,
-                `Ward: ${selectedWard?.wardName ?? ""} (Ward ${selectedWard?.wardNumber ?? ""})`,
                 `Report ID: ${report.id}`,
                 "",
                 "Thank you.",
@@ -1897,104 +1904,38 @@ export default function ExploreMapPage() {
 
                   <div className="border-t border-slate-100" />
 
-                  {/* ── Share this issue ── */}
-                  <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Share this issue</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Copy link */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(reportUrl).then(() => {
-                            setLinkCopied(true);
-                            setTimeout(() => setLinkCopied(false), 2000);
-                          });
-                        }}
-                        className="flex flex-col items-center gap-1.5 rounded-2xl border border-slate-200 bg-white py-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        {linkCopied ? (
-                          <svg className="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                          </svg>
-                        ) : (
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                          </svg>
-                        )}
-                        {linkCopied ? "Copied!" : "Copy Link"}
-                      </button>
-
-                      {/* WhatsApp share */}
-                      <a
-                        href={waShareHref}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex flex-col items-center gap-1.5 rounded-2xl bg-emerald-500 py-3 text-xs font-semibold text-white transition hover:bg-emerald-600"
-                      >
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                        </svg>
-                        WhatsApp
-                      </a>
-
-                      {/* Twitter / X share */}
-                      <a
-                        href={twitterHref}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex flex-col items-center gap-1.5 rounded-2xl bg-slate-900 py-3 text-xs font-semibold text-white transition hover:bg-slate-700"
-                      >
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/>
-                        </svg>
-                        Twitter / X
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={amplifyQueueBusy || !session?.access_token}
-                      onClick={async () => {
-                        if (!session?.access_token) {
-                          pushToast("error", "Sign in to queue an official post request.");
+                  <IssueSharePanel
+                    shareInput={shareInput}
+                    imageUrls={beforeImages}
+                    officialAmplifyMailto={officialAmplifyMailto}
+                    canQueueAmplify={Boolean(session?.access_token)}
+                    amplifyQueueBusy={amplifyQueueBusy}
+                    onQueueAmplify={async () => {
+                      if (!session?.access_token) {
+                        pushToast("error", "Sign in to queue an official post request.");
+                        return;
+                      }
+                      setAmplifyQueueBusy(true);
+                      try {
+                        const res = await fetch("/api/amplify-requests", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${session.access_token}`,
+                          },
+                          body: JSON.stringify({ reportId: report.id }),
+                        });
+                        const json = (await res.json()) as { error?: string; id?: string };
+                        if (!res.ok) {
+                          pushToast("error", json.error ?? "Could not queue request.");
                           return;
                         }
-                        setAmplifyQueueBusy(true);
-                        try {
-                          const res = await fetch("/api/amplify-requests", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${session.access_token}`,
-                            },
-                            body: JSON.stringify({ reportId: report.id }),
-                          });
-                          const json = (await res.json()) as { error?: string; id?: string };
-                          if (!res.ok) {
-                            pushToast("error", json.error ?? "Could not queue request.");
-                            return;
-                          }
-                          pushToast("success", "Queued for @nammaporuppu. Our team will review and post when appropriate.");
-                        } finally {
-                          setAmplifyQueueBusy(false);
-                        }
-                      }}
-                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-accent-200 bg-accent-50 py-3 text-xs font-bold text-accent-800 transition hover:bg-accent-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                      </svg>
-                      {amplifyQueueBusy ? "Queueing…" : "Queue official @nammaporuppu post"}
-                    </button>
-                    <a
-                      href={officialAmplifyMailto}
-                      className="mt-1.5 block text-center text-[11px] font-semibold text-accent-700 hover:underline"
-                    >
-                      Or email hello@nammaporuppu.in instead
-                    </a>
-                    <p className="mt-2 text-center text-[11px] text-slate-400">
-                      &ldquo;Twitter / X&rdquo; opens your own account. Queue or email us if you prefer not to post personally.
-                    </p>
-                  </div>
+                        pushToast("success", "Queued for @nammaporuppu. Our team will review and post when appropriate.");
+                      } finally {
+                        setAmplifyQueueBusy(false);
+                      }
+                    }}
+                  />
 
                 </div>
               );
