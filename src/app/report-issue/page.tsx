@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageBody, PageHero } from "@/components/site-page-shell";
 import { useCity } from "@/context/city-context";
 import { City } from "@/lib/cities";
@@ -12,6 +13,12 @@ import { supabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { useTranslation } from "@/context/language-context";
 import { categoryLabel } from "@/lib/i18n";
+import { buildWhatsAppUrl, getContactForCategory } from "@/lib/civic-contacts";
+import { buildOfficialWhatsAppMessage, formatWardLabel } from "@/lib/issue-share";
+import { buildReportIssueUrl, isIssueCategory } from "@/lib/report-url";
+import { loadRememberedCategory, rememberReportCategory } from "@/lib/remember-report-prefs";
+import { SimilarIssuesNearby } from "@/components/similar-issues-nearby";
+import { VoiceToTextButton } from "@/components/voice-to-text-button";
 
 const CAT_ICON: Record<string, string> = {
   Pothole: "🕳",
@@ -106,14 +113,18 @@ async function searchLocationByText(query: string, cityName: string): Promise<Se
   }
 }
 
-export default function ReportIssuePage() {
+function ReportIssuePageContent() {
+  const router = useRouter();
   const { user, session, loading } = useAuth();
   const { city } = useCity();
   const { t, locale } = useTranslation();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("form");
   const [reportRef, setReportRef] = useState("");
   const [submittedReportId, setSubmittedReportId] = useState("");
+  const [submittedWardId, setSubmittedWardId] = useState<string | null>(null);
   const [mappedWardLabel, setMappedWardLabel] = useState("");
+  const [initialParamsApplied, setInitialParamsApplied] = useState(false);
 
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [category, setCategory] = useState("");
@@ -139,7 +150,60 @@ export default function ReportIssuePage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const addressRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { detectLocation(); }, []);
+  const applyCoords = useCallback(
+    async (lat: number, lng: number) => {
+      if (!isWithinSelectedCityBounds(city, lat, lng)) {
+        setLocationError(`Location must be within ${city.name}. Use Pick on map to adjust.`);
+        setLocStage("error");
+        return;
+      }
+      setLocationError("");
+      setLocStage("geocoding");
+      const geo = await reverseGeocode(lat, lng);
+      setLocation({
+        lat,
+        lng,
+        accuracy: 0,
+        street: geo.street ?? "",
+        neighbourhood: geo.neighbourhood ?? "",
+        city: geo.city ?? "",
+        postcode: geo.postcode ?? "",
+        displayAddress: geo.displayAddress ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      });
+      setLocStage("done");
+    },
+    [city],
+  );
+
+  useEffect(() => {
+    if (initialParamsApplied) return;
+    let cancelled = false;
+
+    async function bootstrap() {
+      const catParam = searchParams.get("category");
+      if (catParam && isIssueCategory(catParam)) {
+        setCategory(catParam);
+      } else {
+        const remembered = loadRememberedCategory();
+        if (remembered) setCategory(remembered);
+      }
+
+      const lat = Number(searchParams.get("lat"));
+      const lng = Number(searchParams.get("lng"));
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        await applyCoords(lat, lng);
+      } else {
+        detectLocation();
+      }
+
+      if (!cancelled) setInitialParamsApplied(true);
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialParamsApplied, searchParams, applyCoords]);
 
   async function detectLocation() {
     setLocationError("");
@@ -253,6 +317,14 @@ export default function ReportIssuePage() {
     setTimeout(() => addressRef.current?.focus(), 50);
   }
 
+  function appendVoiceTranscript(text: string) {
+    if (!text.trim()) return;
+    setDescription((prev) => {
+      const sep = prev.trim() ? " " : "";
+      return `${prev}${sep}${text.trim()}`.slice(0, 500);
+    });
+  }
+
   function saveManualAddress() {
     if (manualAddress.trim()) {
       setLocation((prev) =>
@@ -273,11 +345,15 @@ export default function ReportIssuePage() {
     e.preventDefault();
     setSubmitError("");
     if (!user) {
-      setSubmitError("Please sign in to submit a report.");
+      router.push(`/auth?next=${encodeURIComponent(authNextPath)}`);
       return;
     }
     if (!category) {
       setSubmitError("Issue type is required.");
+      return;
+    }
+    if (photos.length === 0) {
+      setSubmitError(t("report.photoRequired"));
       return;
     }
     if (!location || !effectiveAddress.trim()) {
@@ -322,16 +398,18 @@ export default function ReportIssuePage() {
       const reportRow = createData as {
         id: string;
         reportRef?: string;
-        wardId?: string;
+        wardId?: string | null;
         wardName?: string | null;
         wardNumber?: number | null;
       };
       if (!reportRow?.id) throw new Error("Report ID missing from API response");
-      setMappedWardLabel(
-        reportRow.wardName && reportRow.wardNumber
-          ? `Ward ${reportRow.wardNumber} · ${reportRow.wardName}`
-          : "Ward mapping unavailable",
-      );
+      const wardLabel =
+        reportRow.wardName != null && reportRow.wardNumber != null
+          ? formatWardLabel(reportRow.wardNumber, reportRow.wardName)
+          : "Ward mapping unavailable";
+      setMappedWardLabel(wardLabel);
+      setSubmittedWardId(reportRow.wardId ?? null);
+      rememberReportCategory(category);
       setUploadProgress(20);
       setUploadStage("Report created");
 
@@ -400,6 +478,7 @@ export default function ReportIssuePage() {
     setLocStage("idle");
     setReportRef("");
     setSubmittedReportId("");
+    setSubmittedWardId(null);
     setMappedWardLabel("");
     setManualAddress("");
     setLocationError("");
@@ -413,8 +492,54 @@ export default function ReportIssuePage() {
     detectLocation();
   }
 
+  const authNextPath = useMemo(() => {
+    const params: { lat?: number; lng?: number; category?: string } = {};
+    if (location) {
+      params.lat = location.lat;
+      params.lng = location.lng;
+    }
+    if (category && isIssueCategory(category)) params.category = category;
+    return buildReportIssueUrl(params);
+  }, [location, category]);
+
+  const gccWhatsAppHref = useMemo(() => {
+    if (!submittedReportId || !location) return null;
+    const dept = getContactForCategory(category, city.id);
+    if (!dept.whatsapp) return null;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const reportUrl = `${origin}/explore-map?reportId=${submittedReportId}${submittedWardId ? `&wardId=${submittedWardId}` : ""}`;
+    const message = buildOfficialWhatsAppMessage({
+      category,
+      description: description || null,
+      address: effectiveAddress,
+      wardLabel: mappedWardLabel !== "Ward mapping unavailable" ? mappedWardLabel : city.name,
+      cityId: city.id,
+      cityName: city.name,
+      reportUrl,
+      representative: null,
+      lat: location.lat,
+      lng: location.lng,
+    });
+    return buildWhatsAppUrl(dept.whatsapp, message);
+  }, [
+    submittedReportId,
+    submittedWardId,
+    location,
+    category,
+    description,
+    effectiveAddress,
+    mappedWardLabel,
+    city.id,
+    city.name,
+  ]);
+
   /* ── Success screen ── */
   if (step === "success") {
+    const mapViewHref =
+      submittedReportId && typeof window !== "undefined"
+        ? `${window.location.origin}/explore-map?reportId=${submittedReportId}${submittedWardId ? `&wardId=${submittedWardId}` : ""}`
+        : "/explore-map";
+
     return (
       <main className="min-h-[calc(100vh-64px)]">
         <PageHero
@@ -425,7 +550,7 @@ export default function ReportIssuePage() {
           containerWidth="xl"
         />
         <PageBody maxWidth="sm" className="pt-6 md:pt-8">
-        <div className="mx-auto w-full max-w-sm rounded-3xl bg-white p-10 text-center ring-1 ring-slate-200">
+        <div className="mx-auto w-full max-w-sm rounded-3xl bg-white p-8 text-center ring-1 ring-slate-200">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">✅</div>
           <p className="mt-4 text-sm font-medium text-slate-600">Here&apos;s your tracking summary.</p>
           <div className="mt-6 space-y-1.5 rounded-2xl bg-slate-50 px-4 py-4 text-left text-xs">
@@ -435,11 +560,11 @@ export default function ReportIssuePage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Category</span>
-              <span className="font-semibold text-slate-700">{CAT_ICON[category]} {category}</span>
+              <span className="font-semibold text-slate-700">{CAT_ICON[category]} {categoryLabel(locale, category)}</span>
             </div>
-            {mappedWardLabel && (
+            {mappedWardLabel && mappedWardLabel !== "Ward mapping unavailable" && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Mapped Ward</span>
+                <span className="text-slate-400">Ward</span>
                 <span className="font-semibold text-slate-700">{mappedWardLabel}</span>
               </div>
             )}
@@ -456,13 +581,32 @@ export default function ReportIssuePage() {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={resetForm}
-            className="mt-3 w-full rounded-full bg-brand-600 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
-          >
-            Report Another Issue
-          </button>
+
+          <div className="mt-4 space-y-2">
+            {gccWhatsAppHref ? (
+              <a
+                href={gccWhatsAppHref}
+                target="_blank"
+                rel="noreferrer"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+              >
+                {t("report.sendWhatsappGcc")}
+              </a>
+            ) : null}
+            <Link
+              href={mapViewHref}
+              className="flex w-full items-center justify-center rounded-full border border-slate-200 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+            >
+              {t("report.viewOnMap")}
+            </Link>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="flex w-full items-center justify-center rounded-full bg-brand-600 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
+            >
+              {t("report.reportAnother")}
+            </button>
+          </div>
         </div>
         </PageBody>
       </main>
@@ -481,22 +625,36 @@ export default function ReportIssuePage() {
       />
       <PageBody maxWidth="xl">
         {!loading && !user ? (
-          <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-900">
-            <p className="font-semibold">Sign in required</p>
-            <p className="mt-1 text-xs text-brand-700">
-              To prevent spam reports, you need to sign in before submitting an issue.
-            </p>
-            <Link
-              href={`/auth?next=${encodeURIComponent("/report-issue")}`}
-              className="mt-3 inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
-            >
-              Sign in to continue
-            </Link>
-          </div>
+          <p className="mb-2 text-center text-xs text-slate-500">{t("report.signInHint")}</p>
         ) : null}
         <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
 
-          {/* ── 1. Location (first - most important, auto-filled) ── */}
+          {photoBlock()}
+          {categoryBlock()}
+          {locationBlock()}
+          {noteBlock()}
+
+          {category &&
+          location &&
+          Number.isFinite(location.lat) &&
+          Number.isFinite(location.lng) &&
+          (location.lat !== 0 || location.lng !== 0) ? (
+            <SimilarIssuesNearby
+              cityId={city.id}
+              lat={location.lat}
+              lng={location.lng}
+              category={category}
+            />
+          ) : null}
+
+          {submitBlock()}
+        </form>
+      </PageBody>
+    </main>
+  );
+
+  function locationBlock() {
+    return (
           <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden">
             <div className="px-5 pt-4 pb-1 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-800">📍 Location <span className="text-brand-500">*</span></p>
@@ -747,8 +905,11 @@ export default function ReportIssuePage() {
               </div>
             )}
           </div>
+    );
+  }
 
-          {/* ── 2. Category ── */}
+  function categoryBlock() {
+    return (
           <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
             <p className="text-sm font-semibold text-slate-800">What type of issue? <span className="text-brand-500">*</span></p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -764,24 +925,29 @@ export default function ReportIssuePage() {
                   }`}
                 >
                   <span>{CAT_ICON[cat] ?? "📌"}</span>
-                  {cat}
+                  {categoryLabel(locale, cat)}
                 </button>
               ))}
             </div>
             {!category && (
-              <p className="mt-2 text-[11px] text-slate-400">Tap to select - required</p>
+              <p className="mt-2 text-[11px] text-slate-400">Tap to select — required</p>
             )}
           </div>
+    );
+  }
 
-          {/* ── 3. Photo ── */}
+  function photoBlock() {
+    return (
           <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-800">📸 Photo</p>
-              <span className="text-[11px] text-slate-400">Up to 3 · optional but recommended</span>
+              <p className="text-sm font-semibold text-slate-800">
+                📸 Photo <span className="text-brand-500">*</span>
+              </p>
+              <span className="text-[11px] text-slate-400">Required · up to 3</span>
             </div>
             <input ref={fileRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={handlePhotos} />
             <div className="mt-3 flex flex-wrap gap-3">
-            {photos.map((item, i) => (
+              {photos.map((item, i) => (
                 <div key={i} className="relative h-24 w-24 overflow-hidden rounded-xl ring-1 ring-slate-200">
                   <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
                   <button
@@ -791,7 +957,9 @@ export default function ReportIssuePage() {
                       setPhotos((p) => p.filter((_, j) => j !== i));
                     }}
                     className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] text-white"
-                  >✕</button>
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
               {photos.length < MAX_IMAGES && (
@@ -809,32 +977,74 @@ export default function ReportIssuePage() {
               )}
             </div>
             {photos.length === 0 && (
-              <p className="mt-2 text-[11px] text-slate-400">A photo makes your report 3× more likely to get resolved quickly.</p>
+              <p className="mt-2 text-[11px] font-semibold text-brand-600">{t("report.photoRequired")}</p>
             )}
             {photoError && (
               <p className="mt-2 text-[11px] font-semibold text-brand-600">{photoError}</p>
             )}
           </div>
+    );
+  }
 
-          {/* ── 4. Note ── */}
-          <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-            <p className="text-sm font-semibold text-slate-800">📝 Add a note <span className="font-normal text-slate-400">(optional)</span></p>
+  function noteBlock() {
+    return (
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-800">
+                  🎤 {t("report.quickNote")} <span className="font-normal text-slate-400">(optional)</span>
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{t("report.quickNoteHint")}</p>
+              </div>
+              <VoiceToTextButton
+                prominent
+                onTranscript={(text, isFinal) => {
+                  if (isFinal) appendVoiceTranscript(text);
+                }}
+                disabled={submitting}
+              />
+            </div>
             <textarea
-              placeholder="e.g. This pothole has been here for 2 weeks. Cars keep swerving. Safety risk at night."
+              placeholder={t("report.quickNotePlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
-              rows={3}
+              rows={2}
               style={{ fontSize: "16px" }}
               className="mt-3 w-full resize-none rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-brand-300"
             />
             <p className="mt-1 text-right text-[11px] text-slate-400">{description.length}/500</p>
           </div>
+    );
+  }
 
-          {/* ── Submit ── */}
+  function submitBlock() {
+    const formReady =
+      Boolean(category) &&
+      Boolean(location && effectiveAddress.trim()) &&
+      photos.length > 0;
+    const canSubmit = formReady && Boolean(user);
+    const authHref = `/auth?next=${encodeURIComponent(authNextPath)}`;
+
+    return (
+          <>
+          {!loading && !user && formReady ? (
+            <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5 text-center ring-1 ring-brand-100">
+              <p className="text-sm font-bold text-brand-900">{t("report.signInToSubmitTitle")}</p>
+              <p className="mt-2 text-xs leading-relaxed text-brand-800/90">
+                {t("report.signInToSubmitSubtitle")}
+              </p>
+              <Link
+                href={authHref}
+                className="mt-4 flex w-full items-center justify-center rounded-full bg-brand-600 py-3.5 text-sm font-bold text-white transition hover:bg-brand-700"
+              >
+                {t("report.signInToSubmit")}
+              </Link>
+            </div>
+          ) : (
           <button
             type="submit"
-            disabled={!category || submitting || !user}
+            disabled={!canSubmit || submitting}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-4 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-40"
           >
             {submitting ? (
@@ -843,19 +1053,22 @@ export default function ReportIssuePage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Submitting…
+                {t("report.submitting")}
               </>
             ) : (
               <>
-                Submit Report
-                {!category && <span className="text-[11px] font-normal opacity-70">- select category first</span>}
+                {!user && !loading ? t("report.signInToSubmit") : t("report.submit")}
+                {!category && user && (
+                  <span className="text-[11px] font-normal opacity-70"> — select category</span>
+                )}
               </>
             )}
           </button>
+          )}
           {submitting && (
             <div className="rounded-xl bg-slate-100 px-3 py-2">
               <div className="mb-1 flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-slate-600">{uploadStage || "Submitting..."}</span>
+                <span className="font-semibold text-slate-600">{uploadStage || t("report.submitting")}</span>
                 <span className="text-slate-500">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
@@ -868,15 +1081,27 @@ export default function ReportIssuePage() {
           )}
 
           <p className="text-center text-[11px] text-slate-400">
-            {user
-              ? "Public immediately · Linked to your account for updates"
-              : "Sign in required to submit and track updates"}
+            {user ? t("report.signedInFooter") : t("report.signInFooter")}
           </p>
           {submitError && (
             <p className="text-center text-xs font-semibold text-brand-600">{submitError}</p>
           )}
-        </form>
-      </PageBody>
-    </main>
+          </>
+    );
+  }
+}
+
+export default function ReportIssuePage() {
+  const { t } = useTranslation();
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4">
+          <p className="text-sm text-slate-500">{t("common.loading")}</p>
+        </main>
+      }
+    >
+      <ReportIssuePageContent />
+    </Suspense>
   );
 }

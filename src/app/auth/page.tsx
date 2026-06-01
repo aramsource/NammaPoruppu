@@ -113,10 +113,14 @@ function AuthPageContent() {
       return;
     }
     setMessage(t("auth.loginSuccess"));
-    // Pending report claim is handled by <ClaimRedirect /> in layout once `user` updates.
-    if (typeof window === "undefined" || !sessionStorage.getItem("np_pending_report_claim")) {
-      router.push("/explore-map");
+    if (typeof window === "undefined") return;
+    if (
+      sessionStorage.getItem("np_pending_report_claim") ||
+      sessionStorage.getItem("np_claim_next")
+    ) {
+      return;
     }
+    router.push("/explore-map");
   }
 
   return (

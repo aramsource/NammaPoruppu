@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
-import { claimPendingReport, claimSessionReports } from "@/lib/report-claim";
+import { claimPendingReport, claimSessionReports, consumeAuthNextRedirect } from "@/lib/report-claim";
 
 /**
  * After sign-in (OTP, magic link, or existing session), attach pending anonymous report to the user
@@ -22,10 +22,14 @@ export function ClaimRedirect() {
       // Always auto-claim unclaimed reports from this browser session.
       await claimSessionReports(user.id);
 
-      // Preserve explicit claim flow when user came via ?claim_report=...
-      if (!sessionStorage.getItem("np_pending_report_claim")) return;
-      const dest = await claimPendingReport(user.id);
-      if (!cancelled) router.replace(dest);
+      if (sessionStorage.getItem("np_pending_report_claim")) {
+        const dest = await claimPendingReport(user.id);
+        if (!cancelled) router.replace(dest);
+        return;
+      }
+
+      const next = consumeAuthNextRedirect();
+      if (next && !cancelled) router.replace(next);
     })();
     return () => {
       cancelled = true;

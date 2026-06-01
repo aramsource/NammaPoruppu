@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Report, Ward } from "@/lib/domain";
 import { City, DEFAULT_CITY } from "@/lib/cities";
 import { wardGeoJsonPublicPath } from "@/lib/ward-geo-client";
@@ -21,6 +21,10 @@ type IssueMapViewProps = {
   onWardSelect: (wardId: string) => void;
   /** Clicking an individual issue dot - opens the drawer */
   onIssueClick: (reportId: string, wardId: string) => void;
+  /** When true, map taps call onReportLocationPick instead of ward select */
+  reportPickMode?: boolean;
+  onReportLocationPick?: (lat: number, lng: number) => void;
+  reportPickMarker?: { lat: number; lng: number } | null;
 };
 
 type GeoWardFeature = {
@@ -173,6 +177,22 @@ function CityViewController({ city }: { city: City }) {
   return null;
 }
 
+function MapReportPickHandler({
+  active,
+  onPick,
+}: {
+  active: boolean;
+  onPick: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 function MapZoomButtons() {
   const map = useMap();
   return (
@@ -211,6 +231,9 @@ export function IssueMapView({
   city = DEFAULT_CITY,
   onWardSelect,
   onIssueClick,
+  reportPickMode = false,
+  onReportLocationPick,
+  reportPickMarker = null,
 }: IssueMapViewProps) {
   const { t } = useTranslation();
   const [geoWards, setGeoWards] = useState<GeoWardFeature[]>([]);
@@ -258,7 +281,7 @@ export function IssueMapView({
   const activeIssues = reports.filter((r) => r.status === "open").length;
 
   return (
-    <div className="relative h-full w-full bg-slate-50">
+    <div className={`relative h-full w-full bg-slate-50 ${reportPickMode ? "cursor-crosshair" : ""}`}>
       {/* Stats - top left (matches home hero stats strip tone) */}
       <div className="pointer-events-none absolute left-4 top-32 z-[500] rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-2.5 shadow-lg backdrop-blur-sm md:top-28">
         <div className="flex items-baseline gap-5 text-xs">
@@ -309,6 +332,21 @@ export function IssueMapView({
         <CityViewController city={city} />
         <MapController selectedWardShape={selectedWardShape} />
         <MapZoomButtons />
+        {reportPickMode && onReportLocationPick ? (
+          <MapReportPickHandler active={reportPickMode} onPick={onReportLocationPick} />
+        ) : null}
+
+        {reportPickMarker ? (
+          <Marker
+            position={[reportPickMarker.lat, reportPickMarker.lng]}
+            icon={L.divIcon({
+              html: `<div style="background:#dc2626;width:18px;height:18px;border-radius:9999px;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.25)"></div>`,
+              className: "",
+              iconSize: [18, 18],
+              iconAnchor: [9, 9],
+            })}
+          />
+        ) : null}
 
         {/* All ward polygons - heat map fill with hover highlight */}
         {allWardShapes.map((ward) => {
@@ -322,7 +360,10 @@ export function IssueMapView({
               positions={ring}
               pathOptions={{ color: stroke, fillColor: fill, fillOpacity, weight, opacity: 1 }}
               eventHandlers={{
-                click: () => onWardSelect(ward.wardId),
+                click: () => {
+                  if (reportPickMode) return;
+                  onWardSelect(ward.wardId);
+                },
                 mousemove: () => setHoverWardId(ward.wardId),
                 mouseover: (e) => {
                   setHoverWardId(ward.wardId);

@@ -26,6 +26,7 @@ import {
   buildOfficialWhatsAppMessage,
   formatWardLabel,
 } from "@/lib/issue-share";
+import { buildReportIssueUrl } from "@/lib/report-url";
 
 const IssueMapView = dynamic(
   () => import("@/components/issue-map-view").then((m) => m.IssueMapView),
@@ -148,6 +149,8 @@ export default function ExploreMapPage() {
   const [supportError, setSupportError] = useState("");
   const [selRepId, setSelRepId] = useState<string | null>(null);
   const [amplifyQueueBusy, setAmplifyQueueBusy] = useState(false);
+  const [reportPickMode, setReportPickMode] = useState(false);
+  const [reportPickPoint, setReportPickPoint] = useState<{ lat: number; lng: number } | null>(null);
   /** Expanded media viewer inside the same drawer (no popup overlay). */
   const [expandedMedia, setExpandedMedia] = useState<{ type: "before" | "after" | null; index: number }>({
     type: null,
@@ -1012,18 +1015,74 @@ export default function ExploreMapPage() {
         city={city}
         onWardSelect={handleWardSelect}
         onIssueClick={handleIssueClick}
+        reportPickMode={reportPickMode}
+        reportPickMarker={reportPickPoint}
+        onReportLocationPick={(lat, lng) => {
+          setReportPickPoint({ lat, lng });
+          setReportPickMode(false);
+        }}
       />
 
+      {reportPickMode ? (
+        <div className="pointer-events-none absolute inset-x-4 top-28 z-[800] flex justify-center md:top-24">
+          <p className="rounded-full bg-slate-900/90 px-4 py-2 text-xs font-semibold text-white shadow-lg">
+            {t("explore.reportPickHint")}
+          </p>
+        </div>
+      ) : null}
+
+      {reportPickPoint ? (
+        <div className="absolute bottom-24 left-1/2 z-[800] w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl bg-white p-4 shadow-xl ring-2 ring-brand-200">
+          <p className="text-sm font-bold text-slate-900">{t("explore.reportPickTitle")}</p>
+          <p className="mt-1 text-xs text-slate-500">{t("explore.reportPickSubtitle")}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Link
+              href={buildReportIssueUrl({ lat: reportPickPoint.lat, lng: reportPickPoint.lng })}
+              className="flex items-center justify-center rounded-full bg-brand-600 py-2.5 text-xs font-bold text-white transition hover:bg-brand-700"
+            >
+              {t("explore.reportPickContinue")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setReportPickPoint(null)}
+              className="rounded-full border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              {t("explore.reportPickCancel")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* ── FAB ── */}
-      <Link
-        href="/report-issue"
-        className="absolute bottom-6 right-6 z-[800] flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-black text-white shadow-lg transition hover:bg-brand-700 active:scale-[0.98]"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
-        {t("explore.reportIssueFab")}
-      </Link>
+      <div className="absolute bottom-6 right-6 z-[800] flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setReportPickPoint(null);
+            setReportPickMode((on) => !on);
+          }}
+          className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-bold shadow-lg transition ${
+            reportPickMode
+              ? "bg-slate-900 text-white"
+              : "bg-white text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+          </svg>
+          {t("explore.reportHere")}
+        </button>
+        <Link
+          href={buildReportIssueUrl({})}
+          className="flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-black text-white shadow-lg transition hover:bg-brand-700 active:scale-[0.98]"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          {t("explore.reportIssueFab")}
+        </Link>
+      </div>
 
       {/* ── Vaul Drawer ── */}
       <Drawer

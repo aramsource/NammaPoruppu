@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { issueCategories, Report, Ward } from "@/lib/domain";
+import { Report, Ward } from "@/lib/domain";
 import { useCity } from "@/context/city-context";
 import { useTranslation } from "@/context/language-context";
 import { categoryLabel } from "@/lib/i18n";
-import { supabaseClient } from "@/lib/supabase/client";
+import { buildReportIssueUrl } from "@/lib/report-url";
+import { buildWardElectedGroups } from "@/lib/representative-accountability";
+import { WardElectedAccountability } from "@/components/ward-elected-accountability";
+import { loadCityDashboardData } from "@/lib/load-city-dashboard-data";
+import type { Representative } from "@/lib/domain";
 
 const CAT_ICON: Record<string, string> = {
   Pothole: "🕳",
@@ -27,15 +31,6 @@ const stepsMeta = [
   { num: "03", numBg: "bg-emerald-600", cardBg: "bg-emerald-50 ring-emerald-100", titleKey: "home.step3Title", descKey: "home.step3Desc" },
 ];
 
-type WardApiRow = {
-  id: string;
-  wardNumber: number;
-  wardName: string;
-  zoneName: string;
-  city: string;
-  assemblyConstituency: string;
-};
-
 export function HomePage() {
   const { city, cityReady } = useCity();
   const { t, locale } = useTranslation();
@@ -43,6 +38,7 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
   const [reportsSource, setReportsSource] = useState<Report[]>([]);
   const [wardsSource, setWardsSource] = useState<Ward[]>([]);
+  const [representativesSource, setRepresentativesSource] = useState<Representative[]>([]);
 
   useEffect(() => {
     if (!cityReady) return;
@@ -51,90 +47,18 @@ export function HomePage() {
       setLoading(true);
       setLoadError("");
       try {
-        const [reportsRes, imagesRes, wardsApiRes] = await Promise.all([
-          supabaseClient
-            .from("reports")
-            .select("*")
-            .eq("city_id", city.id)
-            .order("created_at", { ascending: false })
-            .limit(500),
-          supabaseClient
-            .from("report_images")
-            .select("report_id,image_url,created_at")
-            .order("created_at", { ascending: true }),
-          fetch(`/api/wards?cityId=${encodeURIComponent(city.id)}`, { cache: "no-store" }),
-        ]);
-
-        if (reportsRes.error) throw reportsRes.error;
-        if (imagesRes.error) throw imagesRes.error;
-        if (!wardsApiRes.ok) {
-          throw new Error(`Failed to load wards (${wardsApiRes.status})`);
-        }
-
-        const wardsPayload = (await wardsApiRes.json()) as {
-          data?: WardApiRow[];
-          error?: string;
-        };
-        if (wardsPayload.error) throw new Error(wardsPayload.error);
-
-        const wards: Ward[] = (wardsPayload.data ?? []).map((w) => ({
-          id: w.id,
-          wardNumber: w.wardNumber,
-          wardName: w.wardName,
-          zoneName: w.zoneName,
-          city: w.city,
-          assemblyConstituency: w.assemblyConstituency,
-          boundary: [],
-        }));
-
-        const wardById = new Map(wards.map((w) => [w.id, w]));
-        const imageMap = new Map<string, string[]>();
-        for (const img of imagesRes.data ?? []) {
-          const reportId = String(img.report_id ?? "");
-          const imageUrl = String(img.image_url ?? "");
-          if (!reportId || !imageUrl) continue;
-          const arr = imageMap.get(reportId) ?? [];
-          arr.push(imageUrl);
-          imageMap.set(reportId, arr);
-        }
-
-        const reports: Report[] = (reportsRes.data ?? [])
-          .map((r) => {
-            const ward = wardById.get(String(r.ward_id));
-            if (!ward) return null;
-            return {
-              id: String(r.id),
-              userId: "anon",
-              category: r.category as Report["category"],
-              description: (r.description as string | null) ?? null,
-              lat: Number(r.lat),
-              lng: Number(r.lng),
-              address: String(r.display_address ?? ""),
-              status: r.status as Report["status"],
-              supportCount: Number(r.support_count ?? 0),
-              createdAt: String(r.created_at),
-              governance: {
-                wardId: ward.id,
-                wardName: ward.wardName,
-                wardNumber: ward.wardNumber,
-                zoneName: ward.zoneName,
-                city: ward.city,
-                assemblyConstituency: ward.assemblyConstituency,
-              },
-              imageUrls: imageMap.get(String(r.id)) ?? [],
-            } as Report;
-          })
-          .filter(Boolean) as Report[];
-
+        const { wards, reports, representatives } = await loadCityDashboardData(city.id);
         if (mounted) {
           setWardsSource(wards);
           setReportsSource(reports);
+          setRepresentativesSource(representatives);
         }
       } catch (err: unknown) {
         if (mounted) {
           setLoadError(err instanceof Error ? err.message : "Failed to load home data");
           setWardsSource([]);
           setReportsSource([]);
+          setRepresentativesSource([]);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -156,12 +80,9 @@ export function HomePage() {
     latestReports,
     resolvedThisWeek,
     latestDataAt,
-    activeWardStats,
-    wardTableRows,
-    bestWards,
-    worstWards,
-    catStats,
+    activeWardCount,
     hotIssues,
+    wardElectedGroups,
   } = useMemo(() => {
     const totalReports = reportsSource.length;
     const resolvedReports = reportsSource.filter((r) => r.status === "resolved").length;
@@ -189,24 +110,19 @@ export function HomePage() {
         return { ward: w, total, resolved, open, rate };
       })
       .sort((a, b) => b.total - a.total);
-    const activeWardStats = wardStats.filter((w) => w.total > 0);
-    const wardTableRows = activeWardStats.slice(0, 10);
-    const bestWards = [...activeWardStats].sort((a, b) => b.rate - a.rate).slice(0, 2);
-    const worstWards = [...activeWardStats].sort((a, b) => a.rate - b.rate).slice(0, 2);
-
-    const catStats = issueCategories
-      .map((cat) => {
-        const reports = reportsSource.filter((r) => r.category === cat);
-        const resolved = reports.filter((r) => r.status === "resolved").length;
-        return { cat, total: reports.length, resolved, open: reports.length - resolved };
-      })
-      .filter((c) => c.total > 0)
-      .sort((a, b) => b.total - a.total);
+    const activeWardCount = wardStats.filter((w) => w.total > 0).length;
 
     const hotIssues = [...reportsSource]
       .filter((r) => r.status === "open")
       .sort((a, b) => b.supportCount - a.supportCount)
       .slice(0, 3);
+
+    const wardById = new Map(wardsSource.map((w) => [w.id, w]));
+    const wardElectedGroups = buildWardElectedGroups(
+      representativesSource,
+      wardById,
+      reportsSource,
+    );
 
     return {
       totalReports,
@@ -217,14 +133,11 @@ export function HomePage() {
       latestReports,
       resolvedThisWeek,
       latestDataAt,
-      activeWardStats,
-      wardTableRows,
-      bestWards,
-      worstWards,
-      catStats,
+      activeWardCount,
       hotIssues,
+      wardElectedGroups,
     };
-  }, [reportsSource, wardsSource]);
+  }, [reportsSource, wardsSource, representativesSource]);
 
   return (
     <main className="min-h-[calc(100vh-64px)]">
@@ -256,7 +169,7 @@ export function HomePage() {
 
           <div className="mt-7 flex flex-wrap items-center gap-3 md:mt-8 md:gap-4">
             <Link
-              href="/report-issue"
+              href={buildReportIssueUrl({})}
               className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-base font-black text-white transition hover:bg-brand-700 active:scale-[0.98] md:px-7 md:py-4"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -293,7 +206,7 @@ export function HomePage() {
             {[
               { label: t("home.latestReports"), value: latestReports, color: "text-amber-300" },
               { label: t("home.resolvedThisWeek"), value: resolvedThisWeek, color: "text-emerald-400" },
-              { label: t("home.wardCoverage"), value: `${activeWardStats.length}`, color: "text-accent-300" },
+              { label: t("home.wardCoverage"), value: `${activeWardCount}`, color: "text-accent-300" },
               { label: t("home.communitySupports"), value: `${totalSupport}+`, color: "text-brand-300" },
             ].map((s, i) => (
               <div
@@ -386,134 +299,53 @@ export function HomePage() {
       {/* ── Ward Performance ── dark */}
       <section className="bg-slate-900 px-4 py-16 md:py-20">
         <div className="mx-auto max-w-5xl">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">
-                {t("home.accountabilityData")}
-              </span>
-              <h2 className="mt-3 text-3xl font-black text-white md:text-4xl">{t("home.wardPerformance")}</h2>
-              <p className="mt-1 text-sm text-slate-500">{t("home.wardPerformanceSubtitle", { city: city.name })}</p>
-            </div>
-            <span className="rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-black text-emerald-400">
-              {t("home.resolvedCityWide", { rate: resolutionRate })}
+          <div>
+            <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">
+              {t("home.accountabilityData")}
             </span>
+            <h2 className="mt-3 text-3xl font-black text-white md:text-4xl">{t("home.wardPerformance")}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t("home.wardPerformanceSubtitle", { city: city.name })}</p>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-              <div className="flex items-center gap-2 mb-5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600/20 text-base">🔴</span>
-                <div>
-                  <p className="text-sm font-black text-white">{t("home.needsAttention")}</p>
-                  <p className="text-[11px] text-slate-500">{t("home.lowestResolution")}</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {worstWards.map((ws) => (
-                  <Link key={ws.ward.id} href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`} className="block">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-sm font-bold text-white">{ws.ward.wardName} <span className="text-[10px] font-normal text-slate-500">{ws.ward.zoneName}</span></p>
-                      <span className="text-xs font-black text-brand-400">{ws.rate}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-brand-500" style={{ width: `${ws.rate}%` }} />
-                    </div>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      <span className="text-brand-400 font-semibold">{ws.open} open</span> · {ws.resolved} resolved · {ws.total} total
-                    </p>
-                  </Link>
-                ))}
-                {worstWards.length === 0 && <p className="text-sm text-slate-500">{loading ? t("common.loading") : t("home.noDataYet")}</p>}
-              </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 text-center">
+              <p className="text-2xl font-black text-brand-400">{openReports}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">{t("common.open")}</p>
             </div>
-
-            <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-              <div className="flex items-center gap-2 mb-5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-base">🟢</span>
-                <div>
-                  <p className="text-sm font-black text-white">{t("home.topPerformers")}</p>
-                  <p className="text-[11px] text-slate-500">{t("home.highestResolution")}</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {bestWards.map((ws) => (
-                  <Link key={ws.ward.id} href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`} className="block">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-sm font-bold text-white">{ws.ward.wardName} <span className="text-[10px] font-normal text-slate-500">{ws.ward.zoneName}</span></p>
-                      <span className="text-xs font-black text-emerald-400">{ws.rate}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${ws.rate}%` }} />
-                    </div>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      <span className="text-emerald-400 font-semibold">{ws.resolved} resolved</span> · {ws.open} open · {ws.total} total
-                    </p>
-                  </Link>
-                ))}
-                {bestWards.length === 0 && <p className="text-sm text-slate-500">{loading ? t("common.loading") : t("home.noDataYet")}</p>}
-              </div>
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 text-center">
+              <p className="text-2xl font-black text-emerald-400">{resolutionRate}%</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">{t("home.cityResolutionRate")}</p>
+            </div>
+            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 text-center">
+              <p className="text-2xl font-black text-white">{activeWardCount}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">{t("home.wardCoverage")}</p>
             </div>
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 border-b border-white/10 px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              <span>{t("home.ward")}</span>
-              <span className="text-right">{t("common.total")}</span>
-              <span className="text-right">{t("common.open")}</span>
-              <span className="text-right">{t("common.resolved")}</span>
-              <span className="text-right">{t("home.rate")}</span>
+          <div className="mt-8">
+            <h3 className="text-xl font-black text-white">{t("home.repAccountability")}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t("home.repAccountabilitySubtitle")}</p>
+            <div className="mt-4">
+              <WardElectedAccountability groups={wardElectedGroups} variant="dark" limit={15} />
             </div>
-            {wardTableRows.map((ws) => (
-              <Link
-                key={ws.ward.id}
-                href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`}
-                className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 border-b border-white/5 px-5 py-3 text-sm last:border-0 hover:bg-white/5 transition-colors"
-              >
-                <div>
-                  <p className="font-bold text-white">{ws.ward.wardName}</p>
-                  <p className="text-[10px] text-slate-500">{ws.ward.zoneName}</p>
-                </div>
-                <span className="text-right font-semibold text-slate-300">{ws.total}</span>
-                <span className={`text-right font-bold ${ws.open > 0 ? "text-brand-400" : "text-slate-600"}`}>{ws.open}</span>
-                <span className={`text-right font-bold ${ws.resolved > 0 ? "text-emerald-400" : "text-slate-600"}`}>{ws.resolved}</span>
-                <span className={`min-w-[3rem] rounded-full px-2 py-0.5 text-center text-[11px] font-black ${
-                  ws.rate >= 60 ? "bg-emerald-500/20 text-emerald-400" :
-                  ws.rate >= 30 ? "bg-amber-500/20 text-amber-400" :
-                  ws.total > 0 ? "bg-brand-500/20 text-brand-400" : "bg-white/10 text-slate-500"
-                }`}>
-                  {ws.rate}%
-                </span>
-              </Link>
-            ))}
-            {wardTableRows.length === 0 && (
-              <p className="px-5 py-6 text-sm text-slate-500">{loading ? t("home.loadingWardData") : t("home.noWardReports")}</p>
-            )}
           </div>
 
-          {catStats.length > 0 && (
-            <div className="mt-4 rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-              <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-4">{t("home.issuesByCategory")}</h3>
-              <div className="space-y-3">
-                {catStats.map((c) => {
-                  const maxTotal = Math.max(...catStats.map((x) => x.total));
-                  return (
-                    <div key={c.cat} className="flex items-center gap-3">
-                      <span className="w-32 shrink-0 text-xs font-medium text-slate-400 truncate">{categoryLabel(locale, c.cat)}</span>
-                      <div className="flex-1 relative h-4 overflow-hidden rounded-full bg-white/10">
-                        <div className="absolute inset-y-0 left-0 rounded-full bg-brand-500/50" style={{ width: `${(c.total / maxTotal) * 100}%` }} />
-                        <div className="absolute inset-y-0 left-0 rounded-full bg-emerald-500" style={{ width: `${(c.resolved / maxTotal) * 100}%` }} />
-                      </div>
-                      <span className="w-8 shrink-0 text-right text-xs font-black text-white">{c.total}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-4 flex items-center gap-4 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" /> {t("home.resolvedLegend")}</span>
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-brand-500/50 inline-block" /> {t("home.openLegend")}</span>
-              </div>
-            </div>
-          )}
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/analytics"
+              className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700"
+            >
+              {t("home.viewFullAnalytics")}
+              <span aria-hidden>→</span>
+            </Link>
+            <Link
+              href="/explore-map"
+              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/15"
+            >
+              {t("nav.exploreMap")}
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -530,7 +362,7 @@ export function HomePage() {
             {t("home.ctaSubtitle", { city: city.name })}
           </p>
           <Link
-            href="/report-issue"
+            href={buildReportIssueUrl({})}
             className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-600 px-8 py-4 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">

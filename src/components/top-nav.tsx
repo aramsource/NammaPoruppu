@@ -128,6 +128,7 @@ export function TopNav() {
   const navItems = [
     { href: "/report-issue", label: t("nav.reportIssue"), primary: true },
     { href: "/explore-map", label: t("nav.exploreMap"), primary: false },
+    { href: "/analytics", label: t("nav.analytics"), primary: false },
     { href: "/my-reports", label: t("nav.myReports"), primary: false },
   ];
 

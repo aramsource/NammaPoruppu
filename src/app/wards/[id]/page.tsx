@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "@/context/language-context";
 import { ContactActions } from "@/components/contact-actions";
 import { EscalationFlowchart } from "@/components/escalation-flowchart";
 import { WardResponsibilityPanel } from "@/components/ward-responsibility-panel";
@@ -10,7 +11,14 @@ import {
   getEscalationSteps,
   getResponsibilityForCategory,
 } from "@/lib/responsibility";
+import { WardElectedAccountability } from "@/components/ward-elected-accountability";
 import { PageBody, PageHero } from "@/components/site-page-shell";
+import {
+  buildWardElectedGroups,
+  computeRepresentativeAccountability,
+  mapRepresentativeRow,
+} from "@/lib/representative-accountability";
+import { ROLE_LABEL } from "@/lib/representative-labels";
 import { supabaseClient } from "@/lib/supabase/client";
 
 const IssueMapView = dynamic(
@@ -21,6 +29,7 @@ const IssueMapView = dynamic(
 type Params = { params: { id: string } };
 
 export default function WardDashboardPage({ params }: Params) {
+  const { t } = useTranslation();
   const [liveWard, setLiveWard] = useState<Ward | null>(null);
   const [liveReports, setLiveReports] = useState<Report[] | null>(null);
   const [liveRepresentatives, setLiveRepresentatives] = useState<Representative[] | null>(null);
@@ -52,23 +61,7 @@ export default function WardDashboardPage({ params }: Params) {
           });
         }
         if (mounted && reps) {
-          setLiveRepresentatives(
-            reps.map((r) => ({
-              id: r.id,
-              name: r.name,
-              role: r.role,
-              wardId: r.ward_id,
-              area: r.area,
-              constituency: r.constituency,
-              party: r.party,
-              partyColor: r.party_color,
-              photoUrl: r.photo_url,
-              email: r.email,
-              helpline: r.helpline,
-              officeHours: r.office_hours,
-              preferredChannel: r.preferred_channel,
-            })),
-          );
+          setLiveRepresentatives(reps.map(mapRepresentativeRow));
         }
         if (mounted && reports) {
           const imageMap = new Map<string, string[]>();
@@ -139,6 +132,22 @@ export default function WardDashboardPage({ params }: Params) {
     null;
   const totalSupports = reports.reduce((sum, report) => sum + report.supportCount, 0);
 
+  const repAccountability = useMemo(() => {
+    if (!ward) return [];
+    const wardsById = new Map([[ward.id, ward]]);
+    return computeRepresentativeAccountability(representatives, wardsById, reports);
+  }, [ward, representatives, reports]);
+
+  const wardElectedGroups = useMemo(() => {
+    if (!ward) return [];
+    const wardsById = new Map([[ward.id, ward]]);
+    return buildWardElectedGroups(representatives, wardsById, reports);
+  }, [ward, representatives, reports]);
+
+  const primaryRepStats = repAccountability.find(
+    (row) => row.representative.role === responsibility?.primaryRole,
+  );
+
   return (
     <main className="min-h-[calc(100vh-64px)]">
       <PageHero
@@ -176,8 +185,15 @@ export default function WardDashboardPage({ params }: Params) {
         <article className="rounded-2xl border border-emerald-100 bg-white p-5">
           <h2 className="font-semibold">Primary Responsible</h2>
           <p className="mt-2 text-sm text-slate-600">
-            {responsibility?.primaryRole ?? "Not mapped for current issue set"}
+            {responsibility?.primaryRole
+              ? ROLE_LABEL[responsibility.primaryRole]
+              : "Not mapped for current issue set"}
           </p>
+          {primaryRepStats ? (
+            <p className="mt-1 text-xs text-emerald-700">
+              {primaryRepStats.open} open · {primaryRepStats.overdueOpen} overdue · {primaryRepStats.resolutionRate}% resolved
+            </p>
+          ) : null}
         </article>
         <article className="rounded-2xl border border-sky-100 bg-white p-5">
           <h2 className="font-semibold">Support Signals</h2>
@@ -197,6 +213,19 @@ export default function WardDashboardPage({ params }: Params) {
           />
         </section>
       ) : null}
+
+      <section className="mt-6">
+        <h2 className="text-lg font-black text-slate-900">{t("accountability.wardSectionTitle")}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t("accountability.wardSectionSubtitle")}</p>
+        <div className="mt-4">
+          <WardElectedAccountability
+            groups={wardElectedGroups}
+            variant="light"
+            wardId={ward?.id}
+            limit={1}
+          />
+        </div>
+      </section>
 
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <WardResponsibilityPanel

@@ -3,6 +3,7 @@ import { Inter, Noto_Sans_Tamil } from "next/font/google";
 import "./globals.css";
 import { AppFooter } from "@/components/app-footer";
 import { ClaimRedirect } from "@/components/claim-redirect";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { TopNav } from "@/components/top-nav";
 import { CityProvider } from "@/context/city-context";
 import { AuthProvider } from "@/context/auth-context";
@@ -58,6 +59,12 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  appleWebApp: {
+    capable: true,
+    title: "NammaPoruppu",
+    statusBarStyle: "default",
+  },
+  applicationName: "NammaPoruppu",
 };
 
 export default function RootLayout({
@@ -75,6 +82,7 @@ export default function RootLayout({
               <TopNav />
               {children}
               <AppFooter />
+              <PwaInstallPrompt />
             </CityProvider>
           </AuthProvider>
         </LanguageProvider>

@@ -3,6 +3,15 @@ import { supabaseClient } from "@/lib/supabase/client";
 const PENDING_REPORT_KEY = "np_pending_report_claim";
 const CLAIM_NEXT_KEY = "np_claim_next";
 
+/** Post-sign-in redirect from `/auth?next=…` (e.g. return to report form). */
+export function consumeAuthNextRedirect(): string | null {
+  if (typeof window === "undefined") return null;
+  const next = sessionStorage.getItem(CLAIM_NEXT_KEY);
+  if (!next) return null;
+  sessionStorage.removeItem(CLAIM_NEXT_KEY);
+  return next.startsWith("/") ? next : null;
+}
+
 /** Call on /auth when URL contains claim_report / next (e.g. from report success screen). */
 export function stashReportClaimFromSearchParams(claimReport: string | null, next: string | null) {
   if (typeof window === "undefined") return;

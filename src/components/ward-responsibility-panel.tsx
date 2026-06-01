@@ -1,33 +1,7 @@
 "use client";
 
 import { Representative, RepresentativeRole, Ward } from "@/lib/domain";
-
-const ROLE_LABEL: Record<RepresentativeRole, string> = {
-  Councillor: "Ward Councillor",
-  MLA: "MLA",
-  MP: "Member of Parliament",
-  ZonalOfficer: "Zonal Officer",
-  WardEngineer: "Ward Engineer",
-  SanitaryInspector: "Sanitary Inspector",
-};
-
-const ROLE_ICON: Record<RepresentativeRole, string> = {
-  Councillor: "🏛",
-  MLA: "🗳",
-  MP: "🏟",
-  ZonalOfficer: "🏢",
-  WardEngineer: "⚙️",
-  SanitaryInspector: "🧹",
-};
-
-const ROLE_ORDER: RepresentativeRole[] = [
-  "Councillor",
-  "MLA",
-  "MP",
-  "ZonalOfficer",
-  "WardEngineer",
-  "SanitaryInspector",
-];
+import { ROLE_ICON, ROLE_LABEL, ROLE_ORDER } from "@/lib/representative-labels";
 
 type WardResponsibilityPanelProps = {
   ward: Ward | null;
