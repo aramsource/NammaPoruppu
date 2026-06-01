@@ -80,6 +80,8 @@ export default function MyReportsPage() {
   }
   useEffect(() => {
     if (!cityReady) return;
+    if (!user) return;
+    const currentUser = user;
     let mounted = true;
     async function load() {
       try {
@@ -93,6 +95,7 @@ export default function MyReportsPage() {
             .from("reports")
             .select("id, category, description, lat, lng, display_address, status, support_count, created_at, ward_id, reporter_user_id, city_id")
             .eq("city_id", city.id)
+            .eq("reporter_user_id", currentUser.id)
             .order("created_at", { ascending: false })
             .limit(50),
           supabaseClient
