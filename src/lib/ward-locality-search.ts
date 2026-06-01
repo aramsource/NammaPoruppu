@@ -24,12 +24,19 @@ function localityPlaceRank(placeType: string | null | undefined) {
   }
 }
 
-/** Same index as explore-map: locality names (+ report neighbourhoods) per ward, lowercased. */
-export function buildWardAreaSearchIndex(
+export type WardLocalityMaps = {
+  searchIndex: Record<string, string>;
+  /** Primary locality label per ward (e.g. Trustpuram) — same as explore-map hint */
+  hints: Record<string, string>;
+};
+
+/** Same index as explore-map: locality names (+ report neighbourhoods) per ward. */
+export function buildWardLocalityMaps(
   localities: WardLocalityRow[],
   reportNeighbourhoodsByWard: Map<string, string[]>,
-): Record<string, string> {
+): WardLocalityMaps {
   const searchIndex: Record<string, string> = {};
+  const hints: Record<string, string> = {};
   const byWard = new Map<
     string,
     Array<{ localityName: string; isVerified: boolean; placeType: string | null }>
@@ -55,6 +62,7 @@ export function buildWardAreaSearchIndex(
       if (rankDiff !== 0) return rankDiff;
       return a.localityName.localeCompare(b.localityName);
     });
+    if (deduped[0]) hints[wardId] = deduped[0].localityName;
     searchIndex[wardId] = deduped.map((l) => l.localityName.toLowerCase()).join(" ");
   }
 
@@ -62,9 +70,36 @@ export function buildWardAreaSearchIndex(
     const extra = areas.map((a) => a.toLowerCase()).join(" ");
     if (!extra) continue;
     searchIndex[wardId] = searchIndex[wardId] ? `${searchIndex[wardId]} ${extra}` : extra;
+    if (!hints[wardId]) {
+      const topArea = [...new Map(areas.map((a) => [a.toLowerCase(), a])).values()].sort((a, b) =>
+        a.localeCompare(b),
+      )[0];
+      if (topArea) hints[wardId] = topArea;
+    }
   }
 
-  return searchIndex;
+  return { searchIndex, hints };
+}
+
+/** @deprecated Use buildWardLocalityMaps */
+export function buildWardAreaSearchIndex(
+  localities: WardLocalityRow[],
+  reportNeighbourhoodsByWard: Map<string, string[]>,
+): Record<string, string> {
+  return buildWardLocalityMaps(localities, reportNeighbourhoodsByWard).searchIndex;
+}
+
+export function primaryLocalityLabel(ward: Ward, hint: string | undefined): string | null {
+  const raw = (hint ?? "").trim();
+  if (!raw) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const h = norm(raw);
+  const wardName = norm(ward.wardName);
+  const zone = norm(ward.zoneName);
+  if (!h || h === wardName || h === zone) return null;
+  if (wardName.includes(h) || h.includes(wardName)) return null;
+  if (zone.includes(h) || h.includes(zone)) return null;
+  return raw;
 }
 
 export function wardLocalityText(

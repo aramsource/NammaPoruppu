@@ -1,10 +1,7 @@
 import type { Report, Representative, Ward } from "@/lib/domain";
 import { mapRepresentativeRow } from "@/lib/representative-accountability";
 import { supabaseClient } from "@/lib/supabase/client";
-import {
-  buildWardAreaSearchIndex,
-  type WardLocalityRow,
-} from "@/lib/ward-locality-search";
+import { buildWardLocalityMaps, type WardLocalityRow } from "@/lib/ward-locality-search";
 
 type WardApiRow = {
   id: string;
@@ -21,6 +18,8 @@ export type CityDashboardData = {
   representatives: Representative[];
   /** Locality names per ward — same source as explore-map search */
   wardAreaSearchIndex: Record<string, string>;
+  /** Primary locality label per ward (e.g. Trustpuram) */
+  wardAreaHints: Record<string, string>;
 };
 
 export async function loadCityDashboardData(cityId: string): Promise<CityDashboardData> {
@@ -111,7 +110,7 @@ export async function loadCityDashboardData(cityId: string): Promise<CityDashboa
     })
     .filter(Boolean) as Report[];
 
-  const wardAreaSearchIndex = buildWardAreaSearchIndex(
+  const { searchIndex: wardAreaSearchIndex, hints: wardAreaHints } = buildWardLocalityMaps(
     (localitiesRes.data ?? []) as WardLocalityRow[],
     reportNeighbourhoodsByWard,
   );
@@ -127,5 +126,5 @@ export async function loadCityDashboardData(cityId: string): Promise<CityDashboa
     representatives = (repsData ?? []).map(mapRepresentativeRow);
   }
 
-  return { wards, reports, representatives, wardAreaSearchIndex };
+  return { wards, reports, representatives, wardAreaSearchIndex, wardAreaHints };
 }

@@ -30,3 +30,6 @@ export const ROLE_ORDER: RepresentativeRole[] = [
 export function isElectedRole(role: RepresentativeRole): boolean {
   return role === "Councillor" || role === "MLA" || role === "MP";
 }
+
+/** Ward engineers / sanitary inspectors — hidden until a verified roster is seeded. */
+export const STAFF_REPRESENTATIVES_ENABLED = false;

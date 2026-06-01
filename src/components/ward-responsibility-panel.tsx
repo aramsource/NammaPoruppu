@@ -1,7 +1,7 @@
 "use client";
 
 import { Representative, RepresentativeRole, Ward } from "@/lib/domain";
-import { ROLE_ICON, ROLE_LABEL, ROLE_ORDER } from "@/lib/representative-labels";
+import { ROLE_ICON, ROLE_LABEL, ROLE_ORDER, STAFF_REPRESENTATIVES_ENABLED } from "@/lib/representative-labels";
 
 type WardResponsibilityPanelProps = {
   ward: Ward | null;
@@ -44,7 +44,9 @@ export function WardResponsibilityPanel({
     <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
       {/* Header */}
       <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
-        <h3 className="font-bold text-slate-900">Officials - Ward {ward.wardNumber}</h3>
+        <h3 className="font-bold text-slate-900">
+          {STAFF_REPRESENTATIVES_ENABLED ? "Officials" : "Representatives"} — Ward {ward.wardNumber}
+        </h3>
         <p className="text-xs text-slate-500 mt-0.5">{ward.wardName} · {ward.zoneName}</p>
       </div>
 

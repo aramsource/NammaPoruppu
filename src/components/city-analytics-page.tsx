@@ -13,6 +13,7 @@ import { useTranslation } from "@/context/language-context";
 import { exportCityDataCsv } from "@/lib/analytics-export";
 import {
   matchesAreaQuery,
+  repRowMatchesQuery,
   wardElectedGroupMatchesQuery,
   wardStatMatchesQuery,
 } from "@/lib/analytics-search";
@@ -20,9 +21,11 @@ import { computeCityAnalytics } from "@/lib/city-analytics";
 import { categoryLabel } from "@/lib/i18n";
 import { loadCityDashboardData } from "@/lib/load-city-dashboard-data";
 import { usePaginatedSlice } from "@/lib/use-paginated-slice";
+import { primaryLocalityLabel } from "@/lib/ward-locality-search";
 import type { WardStat } from "@/lib/city-analytics";
 
 const WARD_PAGE_SIZE = 15;
+const ELECTED_PAGE_SIZE = 15;
 
 function StatCard({
   label,
@@ -66,13 +69,14 @@ export function CityAnalyticsPage() {
   const { t, locale } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [areaSearch, setAreaSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [wards, setWards] = useState<Awaited<ReturnType<typeof loadCityDashboardData>>["wards"]>([]);
   const [reports, setReports] = useState<Awaited<ReturnType<typeof loadCityDashboardData>>["reports"]>([]);
   const [representatives, setRepresentatives] = useState<
     Awaited<ReturnType<typeof loadCityDashboardData>>["representatives"]
   >([]);
   const [wardAreaSearchIndex, setWardAreaSearchIndex] = useState<Record<string, string>>({});
+  const [wardAreaHints, setWardAreaHints] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!cityReady) return;
@@ -87,6 +91,7 @@ export function CityAnalyticsPage() {
           setReports(data.reports);
           setRepresentatives(data.representatives);
           setWardAreaSearchIndex(data.wardAreaSearchIndex);
+          setWardAreaHints(data.wardAreaHints);
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -95,6 +100,7 @@ export function CityAnalyticsPage() {
           setReports([]);
           setRepresentatives([]);
           setWardAreaSearchIndex({});
+          setWardAreaHints({});
         }
       } finally {
         if (mounted) setLoading(false);
@@ -112,11 +118,11 @@ export function CityAnalyticsPage() {
   );
 
   const filteredWardStats = useMemo(
-    () => a.activeWardStats.filter((ws) => wardStatMatchesQuery(areaSearch, ws.ward, wardAreaSearchIndex)),
-    [a.activeWardStats, areaSearch, wardAreaSearchIndex],
+    () => a.activeWardStats.filter((ws) => wardStatMatchesQuery(search, ws.ward, wardAreaSearchIndex)),
+    [a.activeWardStats, search, wardAreaSearchIndex],
   );
 
-  const wardPagination = usePaginatedSlice<WardStat>(filteredWardStats, WARD_PAGE_SIZE, areaSearch);
+  const wardPagination = usePaginatedSlice<WardStat>(filteredWardStats, WARD_PAGE_SIZE, search);
 
   const filteredWorstWards = useMemo(() => {
     const pool = [...filteredWardStats].sort((x, y) => x.rate - y.rate);
@@ -129,24 +135,31 @@ export function CityAnalyticsPage() {
   }, [filteredWardStats]);
 
   const filteredWardElected = useMemo(
-    () => a.wardElectedGroups.filter((g) => wardElectedGroupMatchesQuery(areaSearch, g, wardAreaSearchIndex)),
-    [a.wardElectedGroups, areaSearch, wardAreaSearchIndex],
+    () => a.wardElectedGroups.filter((g) => wardElectedGroupMatchesQuery(search, g, wardAreaSearchIndex)),
+    [a.wardElectedGroups, search, wardAreaSearchIndex],
   );
+
+  const electedPagination = usePaginatedSlice(filteredWardElected, ELECTED_PAGE_SIZE, search);
 
   const filteredConstituencies = useMemo(
     () =>
       a.constituencyStats.filter((ac) =>
-        matchesAreaQuery(areaSearch, [ac.constituency]),
+        matchesAreaQuery(search, [ac.constituency]),
       ),
-    [a.constituencyStats, areaSearch],
+    [a.constituencyStats, search],
   );
 
   const filteredZoneStats = useMemo(
-    () => a.zoneStats.filter((z) => matchesAreaQuery(areaSearch, [z.zone])),
-    [a.zoneStats, areaSearch],
+    () => a.zoneStats.filter((z) => matchesAreaQuery(search, [z.zone])),
+    [a.zoneStats, search],
   );
 
-  const areaFilterActive = areaSearch.trim().length > 0;
+  const filteredRepCount = useMemo(() => {
+    if (!search.trim()) return a.repAccountability.length;
+    return a.repAccountability.filter((r) => repRowMatchesQuery(search, r, wardAreaSearchIndex)).length;
+  }, [a.repAccountability, search, wardAreaSearchIndex]);
+
+  const searchActive = search.trim().length > 0;
 
   return (
     <main className="min-h-[calc(100vh-64px)]">
@@ -189,26 +202,30 @@ export function CityAnalyticsPage() {
 
       <PageBody maxWidth="5xl" className="py-8 md:py-10">
         <div className="flex flex-col gap-8 md:gap-10">
-          {/* Ward / area search toolbar */}
+          {/* Unified search */}
           <SectionCard className="p-4 md:p-5">
-            <label htmlFor="analytics-area-search" className="text-sm font-black text-slate-900">
-              {t("analytics.searchWardArea")}
+            <label htmlFor="analytics-search" className="text-sm font-black text-slate-900">
+              {t("analytics.searchAll")}
             </label>
-            <p className="mt-0.5 text-xs text-slate-500">{t("analytics.searchWardAreaHint")}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{t("analytics.searchAllHint")}</p>
             <AnalyticsSearchInput
-              id="analytics-area-search"
-              value={areaSearch}
-              onChange={setAreaSearch}
-              placeholder={t("analytics.searchWardPlaceholder")}
+              id="analytics-search"
+              value={search}
+              onChange={setSearch}
+              placeholder={t("analytics.searchAllPlaceholder")}
               className="mt-3"
             />
-            {areaFilterActive ? (
+            {searchActive ? (
               <p className="mt-2 text-xs font-medium text-brand-700">
-                {t("analytics.filteredWardCount", { count: filteredWardStats.length })}
+                {t("analytics.searchResultsSummary", {
+                  wards: filteredWardStats.length,
+                  elected: filteredWardElected.length,
+                  reps: filteredRepCount,
+                })}
                 {" · "}
                 <button
                   type="button"
-                  onClick={() => setAreaSearch("")}
+                  onClick={() => setSearch("")}
                   className="underline decoration-dotted"
                 >
                   {t("analytics.clearSearch")}
@@ -243,7 +260,7 @@ export function CityAnalyticsPage() {
               icon="🔴"
               wards={filteredWorstWards}
               loading={loading}
-              emptyLabel={areaFilterActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
+              emptyLabel={searchActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
               loadingLabel={t("common.loading")}
               rateTone="brand"
             />
@@ -253,7 +270,7 @@ export function CityAnalyticsPage() {
               icon="🟢"
               wards={filteredBestWards}
               loading={loading}
-              emptyLabel={areaFilterActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
+              emptyLabel={searchActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
               loadingLabel={t("common.loading")}
               rateTone="emerald"
             />
@@ -273,7 +290,9 @@ export function CityAnalyticsPage() {
                 <span className="text-right">{t("common.resolved")}</span>
                 <span className="text-right">{t("home.rate")}</span>
               </div>
-              {wardPagination.slice.map((ws) => (
+              {wardPagination.slice.map((ws) => {
+                const locality = primaryLocalityLabel(ws.ward, wardAreaHints[ws.ward.id]);
+                return (
                 <Link
                   key={ws.ward.id}
                   href={`/explore-map?wardId=${encodeURIComponent(ws.ward.id)}`}
@@ -283,6 +302,7 @@ export function CityAnalyticsPage() {
                     <p className="font-bold text-slate-900">{ws.ward.wardName}</p>
                     <p className="text-[10px] text-slate-500">
                       {t("home.ward")} {ws.ward.wardNumber} · {ws.ward.zoneName}
+                      {locality ? ` · ${locality}` : ""}
                     </p>
                   </div>
                   <span className="text-right font-semibold text-slate-600">{ws.total}</span>
@@ -304,12 +324,13 @@ export function CityAnalyticsPage() {
                     {ws.rate}%
                   </span>
                 </Link>
-              ))}
+              );
+              })}
               {filteredWardStats.length === 0 && (
                 <p className="px-5 py-6 text-sm text-slate-500">
                   {loading
                     ? t("home.loadingWardData")
-                    : areaFilterActive
+                    : searchActive
                       ? t("analytics.noSearchResults")
                       : t("home.noWardReports")}
                 </p>
@@ -349,14 +370,14 @@ export function CityAnalyticsPage() {
                 resolved: z.resolved,
               }))}
               loading={loading}
-              emptyLabel={areaFilterActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
+              emptyLabel={searchActive ? t("analytics.noSearchResults") : t("home.noDataYet")}
               resolvedLegend={t("home.resolvedLegend")}
               openLegend={t("home.openLegend")}
             />
           </section>
 
           {/* Assembly constituencies */}
-          {(filteredConstituencies.length > 0 || !areaFilterActive) && (
+          {(filteredConstituencies.length > 0 || !searchActive) && (
             <SectionCard>
               <div className="border-b border-slate-100 px-5 py-4">
                 <h2 className="font-black text-slate-900">{t("analytics.byConstituency")}</h2>
@@ -387,7 +408,7 @@ export function CityAnalyticsPage() {
                     </div>
                   </div>
                 ))}
-                {filteredConstituencies.length === 0 && areaFilterActive ? (
+                {filteredConstituencies.length === 0 && searchActive ? (
                   <p className="px-5 py-6 text-sm text-slate-500">{t("analytics.noSearchResults")}</p>
                 ) : null}
               </div>
@@ -398,8 +419,21 @@ export function CityAnalyticsPage() {
           <section>
             <h2 className="text-lg font-black text-slate-900">{t("home.repAccountability")}</h2>
             <p className="mt-1 text-sm text-slate-500">{t("home.repAccountabilitySubtitle")}</p>
+            <p className="mt-1 text-sm text-slate-500">{t("analytics.electedPerPage")}</p>
             <div className="mt-4">
-              <WardElectedAccountability groups={filteredWardElected} variant="light" limit={50} />
+              <WardElectedAccountability
+                groups={electedPagination.slice}
+                wardAreaHints={wardAreaHints}
+                variant="light"
+                pagination={{
+                  page: electedPagination.page,
+                  totalPages: electedPagination.totalPages,
+                  rangeStart: electedPagination.rangeStart,
+                  rangeEnd: electedPagination.rangeEnd,
+                  total: electedPagination.total,
+                  onPageChange: electedPagination.setPage,
+                }}
+              />
             </div>
           </section>
 
@@ -412,6 +446,7 @@ export function CityAnalyticsPage() {
                 rows={a.repAccountability}
                 representativeCount={representatives.length}
                 localityIndex={wardAreaSearchIndex}
+                searchQuery={search}
               />
             </div>
           </section>

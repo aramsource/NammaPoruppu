@@ -39,6 +39,7 @@ export function HomePage() {
   const [reportsSource, setReportsSource] = useState<Report[]>([]);
   const [wardsSource, setWardsSource] = useState<Ward[]>([]);
   const [representativesSource, setRepresentativesSource] = useState<Representative[]>([]);
+  const [wardAreaHints, setWardAreaHints] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!cityReady) return;
@@ -47,11 +48,12 @@ export function HomePage() {
       setLoading(true);
       setLoadError("");
       try {
-        const { wards, reports, representatives } = await loadCityDashboardData(city.id);
+        const { wards, reports, representatives, wardAreaHints } = await loadCityDashboardData(city.id);
         if (mounted) {
           setWardsSource(wards);
           setReportsSource(reports);
           setRepresentativesSource(representatives);
+          setWardAreaHints(wardAreaHints);
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -59,6 +61,7 @@ export function HomePage() {
           setWardsSource([]);
           setReportsSource([]);
           setRepresentativesSource([]);
+          setWardAreaHints({});
         }
       } finally {
         if (mounted) setLoading(false);
@@ -326,7 +329,12 @@ export function HomePage() {
             <h3 className="text-xl font-black text-white">{t("home.repAccountability")}</h3>
             <p className="mt-1 text-sm text-slate-500">{t("home.repAccountabilitySubtitle")}</p>
             <div className="mt-4">
-              <WardElectedAccountability groups={wardElectedGroups} variant="dark" limit={15} />
+              <WardElectedAccountability
+                groups={wardElectedGroups}
+                wardAreaHints={wardAreaHints}
+                variant="dark"
+                limit={15}
+              />
             </div>
           </div>
 

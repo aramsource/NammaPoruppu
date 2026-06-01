@@ -27,6 +27,7 @@ import {
   formatWardLabel,
 } from "@/lib/issue-share";
 import { buildReportIssueUrl } from "@/lib/report-url";
+import { STAFF_REPRESENTATIVES_ENABLED } from "@/lib/representative-labels";
 
 const IssueMapView = dynamic(
   () => import("@/components/issue-map-view").then((m) => m.IssueMapView),
@@ -1649,43 +1650,39 @@ export default function ExploreMapPage() {
                   </section>
                 )}
 
-                {/* Officials */}
-                <section>
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-                    Officials - {selectedReport?.category ?? "this issue"}
-                  </p>
-                  <div className="space-y-2">
-                    {officials.map((rep) => {
-                      const isPrimary = rep.role === responsibility?.primaryRole;
-                      return (
-                        <button
-                          key={rep.id}
-                          type="button"
-                          onClick={() => { setSelRepId(rep.id); setDrawerTab("contact"); }}
-                          className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50"
-                        >
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{rep.name}</p>
-                            <p className="text-xs text-slate-500">{rep.role} · {rep.area}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isPrimary && (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Primary</span>
-                            )}
-                            <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {officials.length === 0 && (
-                    <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      Official contacts for this ward are not added yet.
+                {STAFF_REPRESENTATIVES_ENABLED && officials.length > 0 ? (
+                  <section>
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                      Officials - {selectedReport?.category ?? "this issue"}
                     </p>
-                  )}
-                </section>
+                    <div className="space-y-2">
+                      {officials.map((rep) => {
+                        const isPrimary = rep.role === responsibility?.primaryRole;
+                        return (
+                          <button
+                            key={rep.id}
+                            type="button"
+                            onClick={() => { setSelRepId(rep.id); setDrawerTab("contact"); }}
+                            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{rep.name}</p>
+                              <p className="text-xs text-slate-500">{rep.role} · {rep.area}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isPrimary && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Primary</span>
+                              )}
+                              <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
 
                 {/* Escalation flowchart */}
                 {responsibility && (

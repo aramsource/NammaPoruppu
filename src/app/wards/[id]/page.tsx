@@ -218,12 +218,7 @@ export default function WardDashboardPage({ params }: Params) {
         <h2 className="text-lg font-black text-slate-900">{t("accountability.wardSectionTitle")}</h2>
         <p className="mt-1 text-sm text-slate-500">{t("accountability.wardSectionSubtitle")}</p>
         <div className="mt-4">
-          <WardElectedAccountability
-            groups={wardElectedGroups}
-            variant="light"
-            wardId={ward?.id}
-            limit={1}
-          />
+          <WardElectedAccountability groups={wardElectedGroups} variant="light" wardId={ward?.id} />
         </div>
       </section>
 

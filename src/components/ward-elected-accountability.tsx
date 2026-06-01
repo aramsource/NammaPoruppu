@@ -1,19 +1,39 @@
 "use client";
 
 import Link from "next/link";
+import { AnalyticsPagination } from "@/components/analytics-pagination";
 import { useTranslation } from "@/context/language-context";
 import { categoryLabel } from "@/lib/i18n";
 import type { RepresentativeAccountabilityRow, WardElectedGroup } from "@/lib/representative-accountability";
+import { primaryLocalityLabel } from "@/lib/ward-locality-search";
 import { ROLE_ICON, ROLE_LABEL } from "@/lib/representative-labels";
 
 type Props = {
   groups: WardElectedGroup[];
+  wardAreaHints?: Record<string, string>;
   variant?: "dark" | "light";
-  limit?: number;
   wardId?: string;
+  /** Max cards when pagination is not used (e.g. home page) */
+  limit?: number;
+  /** When set, show pagination footer (groups should already be sliced) */
+  pagination?: {
+    page: number;
+    totalPages: number;
+    rangeStart: number;
+    rangeEnd: number;
+    total: number;
+    onPageChange: (page: number) => void;
+  };
 };
 
-export function WardElectedAccountability({ groups, variant = "dark", limit = 15, wardId }: Props) {
+export function WardElectedAccountability({
+  groups,
+  wardAreaHints = {},
+  variant = "dark",
+  wardId,
+  limit,
+  pagination,
+}: Props) {
   const { t, locale } = useTranslation();
   const isDark = variant === "dark";
   const shell = isDark ? "bg-white/5 ring-white/10" : "bg-white ring-slate-200";
@@ -22,10 +42,10 @@ export function WardElectedAccountability({ groups, variant = "dark", limit = 15
   const cardTitle = "text-slate-900";
   const cardMuted = "text-slate-500";
 
-  const filtered = wardId ? groups.filter((g) => g.ward.id === wardId) : groups;
-  const shown = filtered.slice(0, limit);
+  let filtered = wardId ? groups.filter((g) => g.ward.id === wardId) : groups;
+  if (!pagination && limit != null) filtered = filtered.slice(0, limit);
 
-  if (shown.length === 0) {
+  if (filtered.length === 0) {
     return (
       <div className={`rounded-2xl p-5 ring-1 ${shell}`}>
         <p className={`text-sm ${isDark ? "text-slate-400" : cardMuted}`}>{t("accountability.noIssuesYet")}</p>
@@ -35,8 +55,9 @@ export function WardElectedAccountability({ groups, variant = "dark", limit = 15
 
   return (
     <div className="space-y-3">
-      {shown.map((group) => {
+      {filtered.map((group) => {
         const href = `/explore-map?wardId=${encodeURIComponent(group.ward.id)}`;
+        const locality = primaryLocalityLabel(group.ward, wardAreaHints[group.ward.id]);
         return (
           <Link
             key={group.ward.id}
@@ -51,6 +72,11 @@ export function WardElectedAccountability({ groups, variant = "dark", limit = 15
                     {t("home.ward")} {group.ward.wardNumber} · {group.ward.zoneName}
                   </span>
                 </p>
+                {locality ? (
+                  <p className={`mt-0.5 text-[11px] font-medium text-brand-700`}>
+                    {t("analytics.localityLabel", { name: locality })}
+                  </p>
+                ) : null}
                 <p className={`mt-0.5 text-[11px] ${cardMuted}`}>
                   {group.ward.assemblyConstituency} · {group.wardOpen} {t("common.open")} / {group.wardTotal}{" "}
                   {t("common.total")}
@@ -69,6 +95,12 @@ export function WardElectedAccountability({ groups, variant = "dark", limit = 15
           </Link>
         );
       })}
+
+      {pagination ? (
+        <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+          <AnalyticsPagination {...pagination} />
+        </div>
+      ) : null}
 
       <p className={`text-[10px] leading-relaxed ${footnoteMuted}`}>{t("accountability.footnote")}</p>
     </div>
@@ -92,7 +124,12 @@ function ElectedTile({
   const box = "bg-slate-50 ring-1 ring-slate-100";
 
   return (
-    <div className={`rounded-xl p-3 ${box}`}>
+    <div
+      className={`rounded-xl p-3 ${box}`}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
       <div className="flex items-start gap-2.5">
         {rep.photoUrl ? (
           <img src={rep.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />

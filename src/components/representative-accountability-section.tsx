@@ -6,7 +6,12 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "@/context/language-context";
 import { categoryLabel } from "@/lib/i18n";
 import type { RepresentativeAccountabilityRow } from "@/lib/representative-accountability";
-import { isElectedRole, ROLE_ICON, ROLE_LABEL } from "@/lib/representative-labels";
+import {
+  isElectedRole,
+  ROLE_ICON,
+  ROLE_LABEL,
+  STAFF_REPRESENTATIVES_ENABLED,
+} from "@/lib/representative-labels";
 
 type Filter = "all" | "elected" | "officials";
 
@@ -47,8 +52,10 @@ export function RepresentativeAccountabilitySection({
             r.ward.assemblyConstituency === wardAc),
       );
     }
-    if (filter === "elected") list = list.filter((r) => isElectedRole(r.representative.role));
-    if (filter === "officials") list = list.filter((r) => !isElectedRole(r.representative.role));
+    if (STAFF_REPRESENTATIVES_ENABLED) {
+      if (filter === "elected") list = list.filter((r) => isElectedRole(r.representative.role));
+      if (filter === "officials") list = list.filter((r) => !isElectedRole(r.representative.role));
+    }
     return list;
   }, [rows, filter, wardId, onlyWithIssues]);
 
@@ -104,30 +111,32 @@ export function RepresentativeAccountabilitySection({
           </h3>
           <p className={`mt-0.5 text-xs ${textMuted}`}>{t("accountability.repSubtitle")}</p>
         </div>
-        <div className="flex rounded-full bg-black/10 p-0.5 ring-1 ring-inset ring-white/10">
-          {(["all", "elected", "officials"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-3 py-1 text-[10px] font-bold transition ${
-                filter === f
-                  ? isDark
-                    ? "bg-white text-slate-900"
-                    : "bg-slate-900 text-white"
-                  : isDark
-                    ? "text-slate-400 hover:text-white"
-                    : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {f === "all"
-                ? t("accountability.filterAll")
-                : f === "elected"
-                  ? t("accountability.filterElected")
-                  : t("accountability.filterOfficials")}
-            </button>
-          ))}
-        </div>
+        {STAFF_REPRESENTATIVES_ENABLED ? (
+          <div className="flex rounded-full bg-black/10 p-0.5 ring-1 ring-inset ring-white/10">
+            {(["all", "elected", "officials"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`rounded-full px-3 py-1 text-[10px] font-bold transition ${
+                  filter === f
+                    ? isDark
+                      ? "bg-white text-slate-900"
+                      : "bg-slate-900 text-white"
+                    : isDark
+                      ? "text-slate-400 hover:text-white"
+                      : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {f === "all"
+                  ? t("accountability.filterAll")
+                  : f === "elected"
+                    ? t("accountability.filterElected")
+                    : t("accountability.filterOfficials")}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className={`hidden sm:grid grid-cols-[minmax(0,1.4fr)_auto_auto_auto_auto_auto] gap-x-3 border-b px-5 py-2 text-[10px] font-bold uppercase tracking-wider ${head}`}>

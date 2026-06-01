@@ -4,12 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AnalyticsPagination } from "@/components/analytics-pagination";
-import { AnalyticsSearchInput } from "@/components/analytics-search-input";
 import { useTranslation } from "@/context/language-context";
 import { categoryLabel } from "@/lib/i18n";
 import { repRowMatchesQuery } from "@/lib/analytics-search";
 import type { RepresentativeAccountabilityRow } from "@/lib/representative-accountability";
-import { isElectedRole, ROLE_ICON, ROLE_LABEL } from "@/lib/representative-labels";
+import {
+  isElectedRole,
+  ROLE_ICON,
+  ROLE_LABEL,
+  STAFF_REPRESENTATIVES_ENABLED,
+} from "@/lib/representative-labels";
 
 type Filter = "all" | "elected" | "officials";
 
@@ -19,33 +23,38 @@ type Props = {
   rows: RepresentativeAccountabilityRow[];
   representativeCount?: number;
   localityIndex?: Record<string, string>;
+  /** Page-level search (hides per-table search when set) */
+  searchQuery?: string;
 };
 
 export function PaginatedRepAccountability({
   rows,
   representativeCount,
   localityIndex = {},
+  searchQuery,
 }: Props) {
   const { t, locale } = useTranslation();
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const query = searchQuery ?? "";
 
   const filtered = useMemo(() => {
     let list = rows;
-    if (filter === "elected") list = list.filter((r) => isElectedRole(r.representative.role));
-    if (filter === "officials") list = list.filter((r) => !isElectedRole(r.representative.role));
-    if (search.trim()) list = list.filter((r) => repRowMatchesQuery(search, r, localityIndex));
+    if (STAFF_REPRESENTATIVES_ENABLED) {
+      if (filter === "elected") list = list.filter((r) => isElectedRole(r.representative.role));
+      if (filter === "officials") list = list.filter((r) => !isElectedRole(r.representative.role));
+    }
+    if (query.trim()) list = list.filter((r) => repRowMatchesQuery(query, r, localityIndex));
     return list;
-  }, [rows, filter, search, localityIndex]);
+  }, [rows, filter, query, localityIndex]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
   useEffect(() => {
     setPage(1);
-  }, [filter, search]);
+  }, [filter, query]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -67,32 +76,28 @@ export function PaginatedRepAccountability({
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex rounded-full bg-slate-100 p-0.5">
-          {(["all", "elected", "officials"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-3 py-1 text-[10px] font-bold transition ${
-                filter === f ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {f === "all"
-                ? t("accountability.filterAll")
-                : f === "elected"
-                  ? t("accountability.filterElected")
-                  : t("accountability.filterOfficials")}
-            </button>
-          ))}
+      {STAFF_REPRESENTATIVES_ENABLED ? (
+        <div className="border-b border-slate-100 p-4">
+          <div className="flex rounded-full bg-slate-100 p-0.5">
+            {(["all", "elected", "officials"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`rounded-full px-3 py-1 text-[10px] font-bold transition ${
+                  filter === f ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {f === "all"
+                  ? t("accountability.filterAll")
+                  : f === "elected"
+                    ? t("accountability.filterElected")
+                    : t("accountability.filterOfficials")}
+              </button>
+            ))}
+          </div>
         </div>
-        <AnalyticsSearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t("analytics.searchRepPlaceholder")}
-          className="w-full sm:max-w-xs"
-        />
-      </div>
+      ) : null}
 
       <div className="hidden sm:grid grid-cols-[minmax(0,1.4fr)_auto_auto_auto_auto_auto] gap-x-3 border-b border-slate-100 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
         <span>{t("accountability.colRepresentative")}</span>
