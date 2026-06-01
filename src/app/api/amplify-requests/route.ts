@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const { data: report, error: repErr } = await admin
     .from("reports")
-    .select("id, category, description, display_address, ward_id, support_count")
+    .select("id, category, description, display_address, ward_id, support_count, lat, lng")
     .eq("id", reportId)
     .maybeSingle();
   if (repErr) return ok({ error: repErr.message }, { status: 500 });
@@ -69,6 +69,8 @@ export async function POST(request: Request) {
     reportUrl,
     representative,
     supportCount: typeof report.support_count === "number" ? report.support_count : undefined,
+    lat: typeof report.lat === "number" ? report.lat : null,
+    lng: typeof report.lng === "number" ? report.lng : null,
   });
 
   const { data: inserted, error: insErr } = await admin

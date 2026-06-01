@@ -6,12 +6,15 @@ import {
   buildIssueShareMessage,
   buildIssueTweetClipboard,
   buildIssueTweetText,
+  buildOfficialWhatsAppMessage,
+  buildWhatsAppShareMessage,
   shareHashtagsForCategory,
   sharePhotoUrls,
   whatsAppShareUrl,
   xIntentComposeUrl,
   type IssueShareInput,
 } from "@/lib/issue-share";
+import { buildWhatsAppUrl, getContactForCategory } from "@/lib/civic-contacts";
 
 type IssueSharePanelProps = {
   shareInput: IssueShareInput;
@@ -49,7 +52,23 @@ export function IssueSharePanel({
     () => xIntentComposeUrl(tweetText, shareInput.reportUrl, hashtags),
     [tweetText, shareInput.reportUrl, hashtags],
   );
-  const waHref = useMemo(() => whatsAppShareUrl(fullMessage), [fullMessage]);
+  const whatsAppMessage = useMemo(
+    () => buildWhatsAppShareMessage(shareInputWithPhotos),
+    [shareInputWithPhotos],
+  );
+  const waHref = useMemo(() => whatsAppShareUrl(whatsAppMessage), [whatsAppMessage]);
+
+  const officialDept = useMemo(
+    () => getContactForCategory(shareInput.category, shareInput.cityId ?? "chennai"),
+    [shareInput.category, shareInput.cityId],
+  );
+  const officialWaHref = useMemo(() => {
+    if (!officialDept.whatsapp) return null;
+    return buildWhatsAppUrl(
+      officialDept.whatsapp,
+      buildOfficialWhatsAppMessage(shareInputWithPhotos),
+    );
+  }, [officialDept.whatsapp, shareInputWithPhotos]);
   const tweetClipboard = useMemo(
     () => buildIssueTweetClipboard(shareInputWithPhotos),
     [shareInputWithPhotos],
@@ -147,14 +166,30 @@ export function IssueSharePanel({
           {flash === "link" ? t("share.copied") : t("share.copyLink")}
         </button>
 
+        {officialWaHref ? (
+          <a
+            href={officialWaHref}
+            target="_blank"
+            rel="noreferrer"
+            className="col-span-2 flex flex-col items-center gap-1.5 rounded-2xl bg-emerald-600 py-3 text-xs font-bold text-white transition hover:bg-emerald-700 sm:col-span-1"
+          >
+            <WhatsAppIcon />
+            {t("share.whatsappOfficial", { name: officialDept.shortName })}
+          </a>
+        ) : null}
+
         <a
           href={waHref}
           target="_blank"
           rel="noreferrer"
-          className="flex flex-col items-center gap-1.5 rounded-2xl bg-emerald-500 py-3 text-xs font-semibold text-white transition hover:bg-emerald-600"
+          className={`flex flex-col items-center gap-1.5 rounded-2xl py-3 text-xs font-semibold transition ${
+            officialWaHref
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              : "bg-emerald-500 text-white hover:bg-emerald-600"
+          } ${officialWaHref ? "col-span-2 sm:col-span-1" : ""}`}
         >
           <WhatsAppIcon />
-          WhatsApp
+          {officialWaHref ? t("share.whatsappAnyone") : "WhatsApp"}
         </a>
 
         <a
@@ -179,6 +214,9 @@ export function IssueSharePanel({
         ) : null}
       </div>
 
+      {officialWaHref ? (
+        <p className="text-center text-[11px] leading-relaxed text-slate-400">{t("share.whatsappOfficialHint")}</p>
+      ) : null}
       <p className="text-center text-[11px] leading-relaxed text-slate-400">{t("share.tweetHint")}</p>
 
       {onQueueAmplify ? (

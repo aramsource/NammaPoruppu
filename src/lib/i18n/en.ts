@@ -137,6 +137,10 @@ export const en = {
     attachPhotoHint: "Attach this photo when posting on X (X does not auto-attach from links).",
     attachPhotosHint: "Attach all photos when posting on X (tap each to open, then add in X).",
     nativeShare: "Share via device",
+    whatsappOfficial: "WhatsApp {name}",
+    whatsappAnyone: "Share on WhatsApp",
+    whatsappOfficialHint:
+      "Opens GCC (or the relevant agency) chat with your draft. Send Vanakkam first if prompted, then the message. Attach photos manually in WhatsApp.",
     tweetHint:
       "Copy message or X draft, or open X to compose. Add the photo manually after X opens.",
     queueOfficial: "Queue official @nammaporuppu post",

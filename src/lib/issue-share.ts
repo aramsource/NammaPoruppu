@@ -15,6 +15,8 @@ export type IssueShareInput = {
   representative: IssueShareRepresentative | null;
   supportCount?: number;
   imageUrls?: string[];
+  lat?: number | null;
+  lng?: number | null;
 };
 
 const MAX_SHARE_PHOTOS = 3;
@@ -163,6 +165,43 @@ function section(title: string, body: string | string[]): string {
   return `${title}\n${lines.join("\n")}`;
 }
 
+function resolveShareContext(input: IssueShareInput) {
+  const wardLabel = normalizeWardLabelString(input.wardLabel);
+  const street = shareStreetAddress(wardLabel, input.cityName, input.address);
+  const coords = formatShareCoordinates(input.lat, input.lng);
+  return { wardLabel, street, coords };
+}
+
+/** Indented block: title + body lines (2-space indent for readability in WhatsApp). */
+function formatBlock(title: string, lines: string[]): string | null {
+  const body = lines.map((l) => l.trim()).filter(Boolean);
+  if (body.length === 0) return null;
+  if (body.length === 1) return `${title}\n  ${body[0]}`;
+  return `${title}\n${body.map((l) => `  ${l}`).join("\n")}`;
+}
+
+function formatIssueLines(category: string, description: string | null): string[] {
+  const desc = description?.trim();
+  if (!desc) return [category];
+  return [category, desc];
+}
+
+function formatLocationLines(
+  wardLabel: string,
+  cityName: string,
+  street: string,
+  coords: string | null,
+): string[] {
+  const lines = [`${wardLabel}, ${cityName}`];
+  if (street) lines.push(street);
+  if (coords) {
+    const [lat, lng] = coords.split(", ");
+    lines.push(`GPS: ${coords}`);
+    if (lat && lng) lines.push(`Map: https://maps.google.com/?q=${lat},${lng}`);
+  }
+  return lines;
+}
+
 export function sharePhotoUrls(urls: string[] | undefined): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -218,50 +257,60 @@ export function shareTagsLine(category: string, cityName: string) {
   return `#NammaPoruppu #${cityTag} #${typeTag}`;
 }
 
-export function buildIssueShareMessage(input: IssueShareInput): string {
-  const wardLabel = normalizeWardLabelString(input.wardLabel);
-  const placeLine = `${wardLabel}, ${input.cityName}`;
-  const street = shareStreetAddress(wardLabel, input.cityName, input.address);
+export function formatShareCoordinates(lat?: number | null, lng?: number | null): string | null {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  return `${Number(lat.toFixed(6))}, ${Number(lng.toFixed(6))}`;
+}
 
-  const sections: string[] = [
-    `Civic issue · ${placeLine}`,
-    section("Issue type", input.category),
+export function buildIssueShareMessage(input: IssueShareInput): string {
+  const { wardLabel, street, coords } = resolveShareContext(input);
+
+  const sections: (string | null)[] = [
+    "NammaPoruppu — Civic issue report",
+    formatBlock("Issue", formatIssueLines(input.category, input.description)),
+    formatBlock("Location", formatLocationLines(wardLabel, input.cityName, street, coords)),
   ];
 
-  if (street) {
-    sections.push(section("Location", street));
-  }
-
-  const desc = input.description?.trim();
-  if (desc) sections.push(section("Description", desc));
-
   if (input.representative) {
-    const repLines = [`${input.representative.role} — ${input.representative.name}`];
+    const repLines = [`${input.representative.role}: ${input.representative.name}`];
     if (input.representative.area && !representativeAreaRedundant(input.representative.area, wardLabel)) {
-      repLines.push(`Area: ${input.representative.area}`);
+      repLines.push(input.representative.area);
     }
-    sections.push(section("Responsible official", repLines));
+    sections.push(formatBlock("Responsible official", repLines));
   }
 
   if (input.supportCount != null && input.supportCount > 0) {
     sections.push(
-      section(
-        "Community support",
+      formatBlock("Community support", [
         `${input.supportCount} support${input.supportCount === 1 ? "" : "s"}`,
-      ),
+      ]),
     );
   }
 
   const mention = cityXMention(input.cityId);
-  if (mention) sections.push(section("Tag on X", mention));
+  if (mention) sections.push(formatBlock("Tag on X", [mention]));
 
-  const photoSection = formatSharePhotoSection(input.imageUrls ?? []);
-  if (photoSection) sections.push(photoSection);
-
-  sections.push(section("View & support", input.reportUrl));
+  sections.push(formatSharePhotoSection(input.imageUrls ?? []));
+  sections.push(formatBlock("View & support", [input.reportUrl]));
   sections.push(shareTagsLine(input.category, input.cityName));
 
   return joinSections(...sections);
+}
+
+/** Email / WhatsApp to councillor or department (no X tags). */
+export function buildContactOfficialMessage(input: IssueShareInput, recipientName: string): string {
+  const { wardLabel, street, coords } = resolveShareContext(input);
+
+  return joinSections(
+    `Hello ${recipientName},`,
+    "I am reporting a civic issue via NammaPoruppu and request your attention.",
+    formatBlock("Issue", formatIssueLines(input.category, input.description)),
+    formatBlock("Location", formatLocationLines(wardLabel, input.cityName, street, coords)),
+    formatBlock("Report", [input.reportUrl]),
+    "Please review and take necessary action.\n\nThank you.",
+  );
 }
 
 function trimTweetLines(lines: string[], maxChars: number): string {
@@ -283,29 +332,25 @@ function trimTweetLines(lines: string[], maxChars: number): string {
 /** Tweet body only (URL and hashtags passed separately to X intent). */
 export function buildIssueTweetText(input: IssueShareInput): string {
   const mention = cityXMention(input.cityId);
-  const mentionLine = mention ?? null;
-  const mentionSuffix = mentionLine ? `\n\n${mentionLine}` : "";
+  const mentionSuffix = mention ? `\n\n${mention}` : "";
   const max = 220 - mentionSuffix.length;
 
-  const wardLabel = normalizeWardLabelString(input.wardLabel);
-  const placeLine = `${wardLabel}, ${input.cityName}`;
-  const street = shareStreetAddress(wardLabel, input.cityName, input.address);
+  const { wardLabel, street, coords } = resolveShareContext(input);
+  const desc = input.description?.trim();
+  const descSnippet = desc ? (desc.length > 60 ? `${desc.slice(0, 57)}…` : desc) : null;
 
-  const lines: string[] = [`Civic issue (${input.category})`, placeLine];
+  const lines: string[] = [
+    `Civic issue: ${input.category}`,
+    `${wardLabel}, ${input.cityName}`,
+  ];
   if (street) lines.push(street);
-
+  if (coords) lines.push(`GPS ${coords}`);
+  if (descSnippet) lines.push(descSnippet);
   if (input.representative) {
     lines.push(`${input.representative.role}: ${input.representative.name}`);
   }
-
-  const desc = input.description?.trim();
-  if (desc) {
-    const snippet = desc.length > 72 ? `${desc.slice(0, 69)}…` : desc;
-    lines.push(`"${snippet}"`);
-  }
-
   if (input.supportCount != null && input.supportCount > 0) {
-    lines.push(`${input.supportCount} community supports`);
+    lines.push(`${input.supportCount} supports`);
   }
 
   return trimTweetLines(lines, max) + mentionSuffix;
@@ -324,13 +369,31 @@ export function whatsAppShareUrl(message: string) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
+/** Short WhatsApp body — no X tags, hashtags, or photo URLs. */
+export function buildWhatsAppShareMessage(input: IssueShareInput): string {
+  const { wardLabel, street, coords } = resolveShareContext(input);
+
+  return joinSections(
+    "Civic issue report · NammaPoruppu",
+    formatBlock("Issue", formatIssueLines(input.category, input.description)),
+    formatBlock("Location", formatLocationLines(wardLabel, input.cityName, street, coords)),
+    formatBlock("Report link", [input.reportUrl]),
+  );
+}
+
+/** GCC / CMWSSB chatbots: greeting + short grievance text. */
+export function buildOfficialWhatsAppMessage(input: IssueShareInput): string {
+  return `Vanakkam\n\n${buildWhatsAppShareMessage(input)}`;
+}
+
 export function buildIssueTweetClipboard(input: IssueShareInput): string {
-  const sections: string[] = [buildIssueTweetText(input), section("Link", input.reportUrl)];
+  const { wardLabel, street, coords } = resolveShareContext(input);
 
-  const photoSection = formatSharePhotoSection(input.imageUrls ?? []);
-  if (photoSection) sections.push(photoSection);
-
-  sections.push(section("Hashtags", shareTagsLine(input.category, input.cityName)));
-
-  return joinSections(...sections);
+  return joinSections(
+    buildIssueTweetText(input),
+    formatBlock("Location", formatLocationLines(wardLabel, input.cityName, street, coords)),
+    formatBlock("Report link", [input.reportUrl]),
+    formatSharePhotoSection(input.imageUrls ?? []),
+    formatBlock("Hashtags", [shareTagsLine(input.category, input.cityName)]),
+  );
 }

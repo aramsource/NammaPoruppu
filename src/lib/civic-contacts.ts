@@ -37,6 +37,7 @@ const CITY_CONTACTS: Record<string, Record<string, CivicContact>> = {
       name: "Greater Chennai Corporation",
       shortName: "GCC",
       helpline: "1913",
+      whatsapp: "919445061913",
       email: "commr.gcc@gmail.com",
       website: "https://www.chennaicorporation.gov.in",
       description: "Roads, garbage, drainage, footpaths, encroachment",
@@ -116,4 +117,11 @@ export function getContactForCategory(category: string, cityId: string = DEFAULT
   const contacts = getContactsForCity(cityId);
   const key = CATEGORY_CONTACT_MAP[category as IssueCategory] ?? "corp";
   return contacts[key] ?? contacts.corp;
+}
+
+/** Opens WhatsApp to a specific number with pre-filled text (not share picker). */
+export function buildWhatsAppUrl(phone: string, text: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }

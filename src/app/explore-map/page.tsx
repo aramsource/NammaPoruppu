@@ -18,9 +18,14 @@ import { useTranslation } from "@/context/language-context";
 import { categoryLabel, statusLabel } from "@/lib/i18n";
 import { useAuth } from "@/context/auth-context";
 import { supabaseClient } from "@/lib/supabase/client";
-import { getContactForCategory, getContactsForCity } from "@/lib/civic-contacts";
+import { buildWhatsAppUrl, getContactForCategory, getContactsForCity } from "@/lib/civic-contacts";
 import { IssueSharePanel } from "@/components/issue-share-panel";
-import { buildIssueShareMessage, formatWardLabel } from "@/lib/issue-share";
+import {
+  buildContactOfficialMessage,
+  buildIssueShareMessage,
+  buildOfficialWhatsAppMessage,
+  formatWardLabel,
+} from "@/lib/issue-share";
 
 const IssueMapView = dynamic(
   () => import("@/components/issue-map-view").then((m) => m.IssueMapView),
@@ -1507,7 +1512,7 @@ export default function ExploreMapPage() {
                     onClick={() => setDrawerTab("accountability")}
                     className="flex w-full items-center justify-between rounded-2xl border border-accent-200 bg-accent-50/60 px-4 py-3 text-sm font-bold text-accent-800 transition hover:bg-accent-50"
                   >
-                    <span>{hasRepresentativeData ? "Who&apos;s responsible for this?" : "Accountability flow"}</span>
+                    <span>{hasRepresentativeData ? "Who's responsible for this?" : "Accountability flow"}</span>
                     <svg className="h-4 w-4 text-accent-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
@@ -1672,31 +1677,6 @@ export default function ExploreMapPage() {
               // Fallback department contact based on issue category
               const deptContact = getContactForCategory(report.category, city.id);
 
-              // Build pre-filled message (works for both ward rep and dept contact)
-              function buildMsg(recipientName: string) {
-                const lines = [
-                  `Hello ${recipientName},`,
-                  "",
-                  "I am reporting a civic issue via NammaPoruppu and requesting your attention.",
-                  "",
-                  `Issue: ${report.category}`,
-                  `Location: ${report.address}`,
-                  `Ward: ${selectedWard?.wardName ?? ""} (Ward ${selectedWard?.wardNumber ?? ""})`,
-                  `Report ID: ${report.id}`,
-                ];
-                const desc = report.description?.trim();
-                if (desc) {
-                  lines.push("", `Description: ${desc}`);
-                }
-                lines.push(
-                  "",
-                  `View report: ${reportUrl}`,
-                  "",
-                  "Please review and take necessary action. Thank you.",
-                );
-                return lines.join("\n");
-              }
-
               const wardLabel = formatWardLabel(
                 selectedWard?.wardNumber ?? report.governance.wardNumber,
                 selectedWard?.wardName ?? report.governance.wardName,
@@ -1715,7 +1695,12 @@ export default function ExploreMapPage() {
                   : { name: deptContact.shortName, role: deptContact.name },
                 supportCount: totalSupport,
                 imageUrls: beforeImages,
+                lat: report.lat,
+                lng: report.lng,
               };
+
+              const buildMsg = (recipientName: string) =>
+                buildContactOfficialMessage(shareInput, recipientName);
 
               // Ward representative contact hrefs
               const officialMsg = selectedRep ? buildMsg(selectedRep.name) : "";
@@ -1731,7 +1716,7 @@ export default function ExploreMapPage() {
               // Department fallback contact hrefs
               const deptMsg = buildMsg(deptContact.shortName);
               const waDeptHref = deptContact.whatsapp
-                ? `https://wa.me/${deptContact.whatsapp}?text=${encodeURIComponent(deptMsg)}`
+                ? buildWhatsAppUrl(deptContact.whatsapp, buildOfficialWhatsAppMessage(shareInput))
                 : null;
               const emailDeptHref = deptContact.email
                 ? `mailto:${deptContact.email}?subject=${encodeURIComponent(`Civic Issue - ${selectedReport.category} · Ward ${selectedWard?.wardNumber ?? ""} ${selectedWard?.wardName ?? ""}`)}&body=${encodeURIComponent(deptMsg)}`
